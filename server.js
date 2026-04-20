@@ -10,10 +10,54 @@ const port = 3000;
 
 const upload = multer({ dest: 'uploads/' });
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+// セキュリティのため、/uploads ディレクトリを直接公開しないようにします
+// app.use('/uploads', express.static('uploads'));
 app.use(express.json());
 
 const DB_FILE = path.join(__dirname, 'data.json');
+
+// --- Pinata (IPFS) 設定 ---
+// https://app.pinata.cloud/ で作成した API Key を入力してください
+const PINATA_API_KEY = ''; // 'YOUR_API_KEY'
+const PINATA_SECRET_API_KEY = ''; // 'YOUR_SECRET_API_KEY'
+const PINATA_JWT = ''; // もし JWT を使う場合はこちら
+
+/**
+ * Pinata にファイルをアップロードする関数
+ */
+async function uploadToPinata(filePath, fileName) {
+    if (!PINATA_API_KEY || !PINATA_SECRET_API_KEY) {
+        console.warn("Pinata APIキーが設定されていないため、ローカル保存のみ行います。");
+        return null;
+    }
+
+    try {
+        const formData = new FormData();
+        const fileContent = fs.readFileSync(filePath);
+        const blob = new Blob([fileContent]);
+        formData.append('file', blob, fileName);
+
+        const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+            method: 'POST',
+            headers: {
+                'pinata_api_key': PINATA_API_KEY,
+                'pinata_secret_api_key': PINATA_SECRET_API_KEY
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+        } else {
+            console.error("Pinata Upload Error:", await response.text());
+            return null;
+        }
+    } catch (error) {
+        console.error("IPFS Upload Failed:", error);
+        return null;
+    }
+}
 
 if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
@@ -62,7 +106,85 @@ app.post('/api/purchase_sss', async (req, res) => {
 app.get('/api/products', (req, res) => {
     try {
         const data = JSON.parse(fs.readFileSync(DB_FILE));
-        res.json(data.products);
+        console.log(`[GET] Fetching products list. Count: ${data.products.length}`);
+        // 秘密情報(secret)を削除してクライアントに送る (購入後にのみ表示するため)
+        const safeProducts = data.products.map(p => {
+            const { secret, ...safeProduct } = p;
+            return safeProduct;
+        });
+        res.json(safeProducts);
+    } catch (error) {
+        console.error(`[ERROR] Products endpoint failed: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 秘密情報(secret)をクライアントに送る。
+// 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
+app.get('/api/products/:id/secret', (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const requesterAddress = req.query.address; // クエリパラメータから取得
+        
+        console.log(`[GET] Fetching secret for product ID: ${id} (requested by: ${requesterAddress})`);
+        
+        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        const product = data.products.find(p => String(p.id) === String(id));
+        
+        if (!product) {
+            return res.status(404).json({ error: "商品が見つかりません" });
+        }
+
+        // 管理者(A)のアドレスを計算
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+
+        // 購入の簡易検証 (デモ用: 運営、出品者、またはリクエスト者がいる場合に許可)
+        // 本番環境ではここでブロックチェーン上のトランザクション履歴を確認したり、署名検証を行うべきです。
+        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
+             // 接続されていない場合は、URLを隠したメッセージを返す（購入ボタン表示用には必要）
+             return res.json({ secret: "購入後に公開されます" });
+        }
+        
+        console.log(`[SUCCESS] Secret found for product ID ${id}`);
+        res.json({ secret: product.secret });
+    } catch (error) {
+        console.error(`[ERROR] Secret endpoint failed: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ファイルをダウンロードするためのプライベートなエンドポイント
+app.get('/api/products/:id/download', (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const requesterAddress = req.query.address;
+        
+        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        const product = data.products.find(p => String(p.id) === String(id));
+        
+        if (!product) return res.status(404).json({ error: "商品が見つかりません" });
+
+        // セキュリティチェック (簡易版)
+        // 本来は購入済みであることをDB等で確認すべき
+        if (!requesterAddress) {
+            return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
+        }
+
+        // secret からファイルパスを特定
+        // secret 形式: "URL: http://localhost:3000/uploads/filename"
+        const secretStr = product.secret.replace('URL: ', '');
+        if (secretStr.startsWith('http')) {
+            const filename = path.basename(secretStr);
+            const filePath = path.join(__dirname, 'uploads', filename);
+            
+            if (fs.existsSync(filePath)) {
+                res.download(filePath, product.fileName || filename);
+            } else {
+                res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
+            }
+        } else {
+            res.json({ message: "外部URLのため、直接ブラウザで開いてください", url: secretStr });
+        }
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -78,11 +200,15 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-app.post('/api/products', upload.single('file'), (req, res) => {
+app.post('/api/products', upload.single('file'), async (req, res) => {
     try {
-        const { title, price, seller } = req.body;
+        const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl } = req.body;
         const file = req.file;
         if (!file) return res.status(400).json({ error: "ファイルがありません" });
+
+        // IPFS にアップロードを試みる
+        const ipfsUrl = await uploadToPinata(file.path, file.originalname);
+        const secretUrl = ipfsUrl || `http://localhost:3000/uploads/${file.filename}`;
 
         const data = JSON.parse(fs.readFileSync(DB_FILE));
         const newProduct = {
@@ -90,8 +216,12 @@ app.post('/api/products', upload.single('file'), (req, res) => {
             title,
             price: parseInt(price),
             seller,
+            sellerAddress,
+            sellerPublicKey,
+            description: description || "",
+            imageUrl: imageUrl || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop&q=60",
             fileName: file.originalname,
-            secret: `URL: http://localhost:3000/uploads/${file.filename}`
+            secret: `URL: ${secretUrl}`
         };
         data.products.push(newProduct);
         fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
@@ -102,6 +232,68 @@ app.post('/api/products', upload.single('file'), (req, res) => {
     }
 });
 
+// 商品の編集
+app.patch('/api/products/:id', (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { title, price, description, imageUrl, requesterAddress } = req.body;
+        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        const index = data.products.findIndex(p => p.id === id);
+
+        if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
+
+        // 権限チェック (出品者本人か運営Aか)
+        const product = data.products[index];
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+        
+        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
+            return res.status(403).json({ error: "編集権限がありません" });
+        }
+
+        if (title) product.title = title;
+        if (price) product.price = parseInt(price);
+        if (description) product.description = description;
+        if (imageUrl) product.imageUrl = imageUrl;
+
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        res.json({ success: true, product });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 商品の削除
+app.delete('/api/products/:id', (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { requesterAddress } = req.body;
+        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        const index = data.products.findIndex(p => p.id === id);
+
+        if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
+
+        // 権限チェック
+        const product = data.products[index];
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+
+        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
+            return res.status(403).json({ error: "削除権限がありません" });
+        }
+
+        data.products.splice(index, 1);
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// API 404 ハンドラー (HTML ではなく JSON を返すようにする)
+// Express 5.x では '*' にパラメータ名が必要なため、単に '/api' を使用（接頭辞一致）
+app.use('/api', (req, res) => {
+    console.warn(`[404] API route not found: ${req.originalUrl}`);
+    res.status(404).json({ error: `API route not found: ${req.originalUrl}. もしこのURLが正しいはずなら、サーバーを再起動して最新のコードが反映されているか確認してください。` });
+});
 
 app.listen(port, () => {
     console.log(`サーバーが正常に起動しました: http://localhost:${port}`);
