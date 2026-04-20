@@ -1,32 +1,111 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Symbol ファイルマーケット (Testnet)</title>
     <style>
-        body { font-family: sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h1, h2 { color: #1a73e8; }
-        .product-list { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .product-item { border: 1px solid #ddd; padding: 15px; border-radius: 8px; background: #fff; }
-        .price { font-size: 20px; font-weight: bold; color: #e91e63; }
-        button { background-color: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-        button:hover { background-color: #1557b0; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; box-sizing: border-box; }
-        #log { margin-top: 20px; padding: 15px; background: #333; color: #fff; border-radius: 5px; font-family: monospace; white-space: pre-wrap; display: none; }
+        body {
+            font-family: sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h1,
+        h2 {
+            color: #1a73e8;
+        }
+
+        .product-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .product-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .price {
+            font-size: 20px;
+            font-weight: bold;
+            color: #e91e63;
+        }
+
+        button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #1557b0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            color: #fff;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            display: none;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>📑 Symbol ファイルマーケット</h1>
-        <p>ExcelなどのファイルをSymbolの決済と同時に安全に交換します。</p>
-        
+        <h1>📑 Symbol 分散型ファイルマーケット</h1>
+        <p>ウォレット(SSS)と連携し、中央集権を持たずに安全にP2Pでファイルを交換します。</p>
+
+        <div class="card" id="wallet-section">
+            <h2>1. ウォレット連携 (SSS)</h2>
+            <button id="connectSssBtn">SSSと連携する</button>
+            <p id="walletInfo" style="margin-top:10px; font-weight:bold; color:#1a73e8;"></p>
+        </div>
+
         <div class="card">
-            <h2>ファイルを出品する</h2>
+            <h2>2. ファイルを出品する</h2>
             <div class="form-group">
                 <label>商品名</label>
                 <input type="text" id="pTitle" placeholder="例: 2024年度統計データ.xlsx">
@@ -50,33 +129,56 @@
         </div>
 
         <div class="card">
-            <h2>販売中のファイル</h2>
+            <h2>3. 販売中のファイル</h2>
             <div id="productList" class="product-list"></div>
         </div>
 
         <div id="log"></div>
     </div>
 
+    <script src="https://xembook.github.io/nem2-browserify/symbol-sdk-2.0.4.js"></script>
     <script>
+        const symbol = require("/node_modules/symbol-sdk");
+
+        window.onerror = function (msg, url, line, col, error) {
+            console.error('Global Error:', msg, url, line, col, error);
+            if (logDiv) log(`[JS Error] ${msg} (Line: ${line})`, true);
+        };
+
         const logDiv = document.getElementById('log');
+        let activeAddress = null;
+        let activePublicKey = null;
+
         function log(msg, isError = false) {
+            console.log(isError ? 'ERROR:' : 'LOG:', msg);
             logDiv.style.display = 'block';
-            logDiv.innerHTML = `<span style="color: ${isError ? '#ff8a80' : '#b9f6ca'}">${msg}</span>\n` + logDiv.innerHTML;
+            let displayMsg = msg;
+            if (msg instanceof Error) {
+                displayMsg = `${msg.message}\n${msg.stack}`;
+            } else if (typeof msg === 'object') {
+                try {
+                    displayMsg = JSON.stringify(msg, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2);
+                } catch (e) {
+                    displayMsg = msg.toString();
+                }
+            }
+            logDiv.innerHTML = `<span style="color: ${isError ? '#ff8a80' : '#b9f6ca'}">${displayMsg}</span>\n` + logDiv.innerHTML;
         }
 
         async function checkStatus(hash, buyerName, p) {
             let retryCount = 0;
             const maxRetries = 20; // 約1分40秒待機
-            
+
             const interval = setInterval(async () => {
                 retryCount++;
                 log(`承認確認中... (${retryCount}/${maxRetries})`);
-                
+
                 try {
                     // 複数のノードで確認を試みる（冗長性のため）
-                    const res = await fetch(`https://sym-test-01.opening-line.jp:3001/transactionStatus/${hash}`);
+                    const nodeUrl = retryCount % 2 === 1 ? 'https://sym-test-01.opening-line.jp:3001' : 'https://sym-test-02.opening-line.jp:3001';
+                    const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
                     const data = await res.json();
-                    
+
                     if (data.group === 'confirmed') {
                         clearInterval(interval);
                         log(`✨ 承認完了！ブロックチェーンに記録されました。`);
@@ -100,32 +202,145 @@
             }, 5000);
         }
 
+        document.getElementById('connectSssBtn').addEventListener('click', async () => {
+            log('SSSと接続を試みています...');
+
+            // SSSがインジェクトされるまで複数回チェックするリトライ処理
+            let retryCount = 0;
+            const maxRetries = 10; // 0.5秒おきに最大5秒待機
+
+            const checkSSS = () => {
+                if (window.SSS) {
+                    try {
+                        activeAddress = window.SSS.activeAddress;
+                        activePublicKey = window.SSS.activePublicKey;
+
+                        if (!activeAddress) {
+                            log('エラー: SSSのアカウントが選択されていません。SSS拡張機能のアイコンをクリックしてログインしてください。', true);
+                            return alert('SSSのアカウントが選択されていません。');
+                        }
+
+                        document.getElementById('walletInfo').innerText = `連携中アドレス: ${activeAddress}`;
+                        log(`SSSと連携しました: ${activeAddress}`);
+                        return; // 成功したら終了
+                    } catch (error) {
+                        log(`SSS連携に失敗しました: ${error.message}`, true);
+                        return;
+                    }
+                }
+
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    log(`SSSを探しています... (${retryCount}/${maxRetries})`);
+                    setTimeout(checkSSS, 500);
+                } else {
+                    log('エラー: SSS拡張機能が見つかりませんでした。', true);
+                    log('対策1: この画面をリロードしてみてください。', true);
+                    log('対策2: SSSの拡張機能が現在のサイト(localhost)で「サイトデータの読み取りと変更」を許可されているか確認してください。', true);
+                    return alert('SSS拡張機能が見つかりませんでした。ブラウザの設定やリロードをご確認ください。');
+                }
+            };
+
+            checkSSS();
+        });
+
         async function buyProduct(p, buyerName) {
+            if (!activeAddress) return alert('先にSSSと連携してください。');
+
             log(`--- 取引開始: ${p.title} ---`);
-            log(`購入者: ${buyerName}さん / 価格: ${p.price} XYM`);
-            
+            log(`購入者(あなた): ${activeAddress} / 価格: ${p.price} XYM`);
+
             try {
-                log(`署名を作成してノードへ送信中...`);
-                const res = await fetch('/api/purchase', {
+                log(`トランザクションを構築中...`);
+
+                // サーバーから設定（運営の公開鍵など）を取得
+                log(`サーバーから設定を取得中...`);
+                const configRes = await fetch('/api/config');
+                const config = await configRes.json();
+
+                // 出品者の公開鍵をマッピング
+                const sellerPublicKeys = {
+                    'B': '62B79C973DBD5D7B8491F36F4CEEBF926C758BD456D853C3850133C388400206',
+                    'C': 'BC6F23A5C8926FDC6B39A5CB6157656A323BF0EDA6A14ABF9BC1A1500A14CA3E'
+                };
+                const sellerPublicKeyHex = sellerPublicKeys[p.seller];
+                if (!sellerPublicKeyHex) {
+                    throw new Error(`出品者 ${p.seller} の公開鍵が見つかりません`);
+                }
+
+                // --- SDK v2 形式での構築 ---
+                const networkType = symbol.NetworkType.TEST_NET;
+                const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
+                const sellerAccount = symbol.PublicAccount.createFromPublicKey(sellerPublicKeyHex, networkType);
+                const operatorAccount = symbol.PublicAccount.createFromPublicKey(config.operatorPublicKey, networkType);
+                const epochAdjustment = 1667250467; // 最新の Testnet Epoch Adjustment (2022/11/01~)
+
+                // 1. 決済インナートランザクション (購入者 -> 出品者)
+                const txPayment = symbol.TransferTransaction.create(
+                    symbol.Deadline.create(epochAdjustment),
+                    sellerAccount.address,
+                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
+                    symbol.PlainMessage.create('Payment for ' + p.title),
+                    networkType
+                ).toAggregate(buyerAccount);
+
+                // 2. 販売手数料インナートランザクション (購入者 -> 運営A)
+                // 例として、一律 1 XYM を手数料として運営に送る設定にします
+                const feeAmount = 1; 
+                const txPlatformFee = symbol.TransferTransaction.create(
+                    symbol.Deadline.create(epochAdjustment),
+                    operatorAccount.address,
+                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(feeAmount * 1000000))],
+                    symbol.PlainMessage.create('Platform Fee'),
+                    networkType
+                ).toAggregate(buyerAccount);
+
+                // 3. データインナートランザクション (購入者自身へメッセージ送信)
+                const txData = symbol.TransferTransaction.create(
+                    symbol.Deadline.create(epochAdjustment),
+                    buyerAccount.address,
+                    [],
+                    symbol.PlainMessage.create("商品URL: " + p.secret),
+                    networkType
+                ).toAggregate(buyerAccount);
+
+                // アグリゲートトランザクション
+                const aggregateTx = symbol.AggregateTransaction.createComplete(
+                    symbol.Deadline.create(epochAdjustment),
+                    [txPayment, txPlatformFee, txData],
+                    networkType,
+                    [],
+                    symbol.UInt64.fromUint(500000) // MaxFee
+                );
+
+                log(`SSSへ署名を要求します...`);
+                window.SSS.setTransaction(aggregateTx);
+                const signedTx = await window.SSS.requestSign();
+                console.log('SSS署名結果:', signedTx);
+
+                if (!signedTx || !signedTx.payload) {
+                    throw new Error('SSSからの署名データが不正です。');
+                }
+
+                log(`署名完了、ネットワークへ送信中...`);
+                const res = await fetch('/api/purchase_sss', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ productId: p.id, buyerName })
+                    body: JSON.stringify({ signedPayload: signedTx.payload })
                 });
                 const data = await res.json();
 
                 if (data.success) {
-                    log(`🚀 アナウンス成功！ハッシュを受け取りました。`);
-                    log(`ハッシュ: <a href="https://testnet.symbol.fyi/transactions/${data.hash}" target="_blank" style="color:#fff">${data.hash}</a>`);
+                    log(`🚀 アナウンス成功！`);
                     log(`ブロックチェーンでの承認を待っています...`);
-                    checkStatus(data.hash, buyerName, p);
+                    checkStatus(signedTx.hash, activeAddress, p);
                 } else {
                     log(`❌ 送信エラー: ${JSON.stringify(data.error)}`, true);
-                    if (data.error && data.error.code) {
-                        log(`エラーコード: ${data.error.code}`, true);
-                    }
+                    if (data.details) log(`詳細: ${data.details}`, true);
                 }
             } catch (e) {
-                log(`❌ 通信エラー: ${e.message}`, true);
+                console.error('buyProduct error:', e);
+                log(e, true);
             }
         }
 
@@ -134,7 +349,7 @@
             const products = await res.json();
             const list = document.getElementById('productList');
             list.innerHTML = '';
-            
+
             products.forEach(p => {
                 const item = document.createElement('div');
                 const buyerName = p.seller === 'B' ? 'C' : 'B';
@@ -159,7 +374,7 @@
             const seller = document.getElementById('pSeller').value;
             const fileInput = document.getElementById('pFile');
 
-            if(!title || !fileInput.files[0]) return alert('入力が足りません');
+            if (!title || !fileInput.files[0]) return alert('入力が足りません');
 
             const formData = new FormData();
             formData.append('title', title);
@@ -170,7 +385,7 @@
             log("ファイルをアップロード中...");
             const res = await fetch('/api/products', { method: 'POST', body: formData });
 
-            if(res.ok) {
+            if (res.ok) {
                 log("✅ 出品完了！サーバーにファイルが保存されました。");
                 loadProducts();
             } else {
@@ -181,4 +396,5 @@
         loadProducts();
     </script>
 </body>
+
 </html>
