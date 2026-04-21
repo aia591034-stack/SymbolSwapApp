@@ -256,57 +256,14 @@
                 ブロックチェーン上で資産の交換を検証しています...</p>
 
             <!-- Mobile Action Area -->
-            <div id="alice-manual-btn"
-                class="hidden mt-8 flex flex-col items-center space-y-6 w-full animate-in zoom-in duration-500">
-
-                <div class="w-full space-y-3">
-                    <button onclick="launchAlice('symbol')"
-                        class="w-full btn-primary px-8 py-6 rounded-[2rem] text-sm font-black uppercase tracking-[0.2em] text-white shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-4 border-2 border-white/20">
-                        <i class="fas fa-fingerprint text-2xl"></i>
-                        <span>OPEN ALICE</span>
-                    </button>
-                    <button onclick="launchAlice('web+symbol')"
-                        class="w-full py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-400 transition-all">
-                        起動しない場合はこちらを試す
-                    </button>
-                </div>
-
-                <div class="flex flex-col items-center space-y-4">
-                    <div id="qrcode-container" class="bg-white p-4 rounded-3xl shadow-2xl hidden">
-                        <div id="qrcode"></div>
-                        <p class="text-[8px] text-black font-black text-center mt-2 uppercase tracking-widest">Scan with
-                            ALICE</p>
-                    </div>
-
-                    <div class="bg-white/5 p-6 rounded-[2rem] border border-white/10 w-full">
-                        <p class="text-[10px] text-indigo-400 font-black mb-4 text-center uppercase tracking-widest">
-                            【ALICEでのスキャン方法】</p>
-                        <ul class="text-[9px] text-slate-400 space-y-3 font-medium">
-                            <li class="flex items-start space-x-3">
-                                <span
-                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">1</span>
-                                <span>ALICEの<b>ホーム画面</b>を表示</span>
-                            </li>
-                            <li class="flex items-start space-x-3">
-                                <span
-                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">2</span>
-                                <span>画面右上にある <b>[ ] または QRのアイコン</b> をタップ</span>
-                            </li>
-                            <li class="flex items-start space-x-3">
-                                <span
-                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">3</span>
-                                <span>カメラで読み取るか、右下のアイコンからスクショ画像を選択</span>
-                            </li>
-                        </ul>
-                        <p class="text-[7px] text-slate-600 mt-4 text-center">※ ALICEの設定が「Testnet」になっていることを確認してください</p>
-                    </div>
-
-                    <div class="flex flex-col items-center space-y-2">
-                        <button onclick="copyPayload()"
-                            class="text-[10px] font-black text-indigo-400 uppercase tracking-widest py-2 px-4 bg-white/5 rounded-full border border-white/5">
-                            <i class="fas fa-copy mr-2"></i> Copy Data (Backup)
-                        </button>
-                    </div>
+            <div id="direct-manual-msg" class="hidden mt-8 text-center space-y-4 animate-in zoom-in duration-500">
+                <div class="bg-amber-500/10 p-6 rounded-[2rem] border border-amber-500/20 w-full">
+                    <p class="text-[10px] text-amber-400 font-black mb-4 uppercase tracking-widest">
+                        【モバイル・署名待機中】</p>
+                    <p class="text-[9px] text-slate-400 leading-relaxed font-medium">
+                        「直接モード（秘密鍵）」で連携している場合は、バックグラウンドで処理が進行します。
+                        しばらくお待ちください。
+                    </p>
                 </div>
             </div>
         </div>
@@ -718,42 +675,27 @@
         </div>
     </div>
 
-    <!-- Alice Connect Modal -->
-    <div id="aliceModal"
+    <!-- Wallet Connect Modal -->
+    <div id="connectModal"
         class="fixed inset-0 z-[160] hidden flex items-center justify-center p-4 md:p-6 bg-black/90 backdrop-blur-3xl">
         <div class="glass-card w-full max-w-lg rounded-[2rem] md:rounded-[3rem] p-8 md:p-12 shadow-2xl border-white/10">
             <div class="text-center mb-8">
                 <div
                     class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-lg shadow-indigo-500/20">
-                    <i class="fas fa-mobile-alt"></i>
+                    <i class="fas fa-wallet"></i>
                 </div>
-                <h2 class="text-2xl font-black tracking-tighter text-white uppercase">Link ALICE Wallet</h2>
-                <p class="text-[10px] text-slate-500 font-medium mt-2">スマホ版 ALICE ウォレットと連携します</p>
+                <h2 class="text-2xl font-black tracking-tighter text-white uppercase">Link Wallet</h2>
+                <p class="text-[10px] text-slate-500 font-medium mt-2">ウォレットと連携して取引を開始します</p>
             </div>
             <div class="space-y-6">
-                <div class="bg-indigo-500/10 p-5 rounded-2xl border border-indigo-500/20 space-y-3">
-                    <p class="text-[10px] text-indigo-400 font-black uppercase tracking-widest">
-                        <i class="fas fa-exclamation-circle mr-1"></i> 重要確認
-                    </p>
-                    <p class="text-[9px] text-slate-400 leading-relaxed">
-                        ALICEの「設定 > ネットワーク」が <span class="text-white font-bold underline">Testnet</span>
-                        であることを確認してください。メインネット設定では接続できません。
-                    </p>
-                </div>
-
-                <div class="space-y-4">
-                    <a id="alice-auto-link" href="symbol://request-account"
+                <!-- PC Options -->
+                <div id="sss-option" class="space-y-4">
+                    <button id="sss-connect-btn"
                         class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 transition-all border-2 border-white/10">
-                        <i class="fas fa-magic text-lg"></i>
-                        <span>ALICE で自動連携</span>
-                    </a>
-
-                    <div class="flex flex-col items-center space-y-3">
-                        <button onclick="copyLink('account')"
-                            class="text-[9px] font-black text-indigo-400/70 uppercase tracking-widest">
-                            <i class="fas fa-copy mr-1"></i> 起動しない場合はリンクをコピー
-                        </button>
-                    </div>
+                        <i class="fas fa-fingerprint text-lg"></i>
+                        <span>SSS で連携 (PC)</span>
+                    </button>
+                    <p class="text-[8px] text-slate-500 text-center uppercase tracking-widest">Chrome 拡張機能が必要です</p>
                 </div>
 
                 <div class="relative py-4 flex items-center">
@@ -763,66 +705,34 @@
                     <div class="flex-grow border-t border-white/10"></div>
                 </div>
 
-                <div class="space-y-3">
-                    <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">手動入力
-                        (バックアップ)</label>
-                    <div class="relative">
-                        <input type="text" id="alice-address" placeholder="アドレスを入力 (T...)"
-                            oninput="autoFetchPublicKey(this.value)"
-                            class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase pr-12">
-                        <div id="addr-check-icon" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
-                            <i class="fas fa-check-circle text-emerald-400"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="space-y-3">
-                    <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">あなたの公開鍵</label>
-                    <input type="text" id="alice-publickey" placeholder="公開鍵を入力 (62B...)"
-                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
-                    <p id="pubkey-msg" class="text-[8px] text-slate-500 italic">※ アドレスを入力すると自動取得を試みます</p>
-                </div>
-
-                <div class="relative py-4 flex items-center">
-                    <div class="flex-grow border-t border-white/10"></div>
-                    <span
-                        class="flex-shrink mx-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">または（最終手段）</span>
-                    <div class="flex-grow border-t border-white/10"></div>
-                </div>
-
-                <div class="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20 space-y-4">
-                    <div class="flex flex-col items-center space-y-2">
-                        <p class="text-[8px] text-amber-500 font-black uppercase tracking-widest">ブラウザ完結モード</p>
-                        <button onclick="toggleDirectMode()"
-                            class="w-full py-3 bg-amber-500/10 rounded-xl text-amber-500 font-black text-[9px] uppercase tracking-[0.2em] border border-amber-500/20 transition-all hover:bg-amber-500/20">
-                            <i class="fas fa-key mr-2"></i> 秘密鍵で直接サイン
-                        </button>
-                    </div>
-
-                    <div id="direct-mode-input" class="hidden space-y-3">
-                        <input type="password" id="direct-private-key" placeholder="秘密鍵 (64文字)"
-                            class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white">
-                        <p class="text-[7px] text-slate-500 leading-relaxed italic">
-                            ※ 秘密鍵は署名にのみ使用され、サーバーには送信されません。
+                <!-- Direct Mode / Mobile Option -->
+                <div class="bg-amber-500/5 p-6 rounded-[2rem] border border-amber-500/20 space-y-4">
+                    <div class="flex flex-col items-center space-y-3">
+                        <p class="text-[10px] text-amber-500 font-black uppercase tracking-widest">直接モード (モバイル推奨)</p>
+                        <p class="text-[9px] text-slate-400 text-center leading-relaxed">
+                            秘密鍵を使用してブラウザ内で直接署名します。
                         </p>
+                    </div>
+
+                    <div id="direct-mode-input" class="space-y-4 mt-4">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">秘密鍵
+                                (64文字)</label>
+                            <input type="password" id="direct-private-key" placeholder="PRIVATE KEY (64 CHARS)"
+                                class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white">
+                        </div>
                         <button id="confirm-direct-link" onclick="connectDirectMode()"
-                            class="w-full bg-amber-600 text-white py-4 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                            class="w-full bg-amber-600 hover:bg-amber-500 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-amber-600/20 active:scale-95 transition-all">
                             直接モードで連携
                         </button>
+                        <p class="text-[7px] text-slate-500 leading-relaxed text-center italic">
+                            ※ 秘密鍵は署名にのみ使用され、サーバーには送信されません。
+                        </p>
                     </div>
                 </div>
 
-                <div id="alice-connection-status"
-                    class="hidden bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20 text-center">
-                    <p class="text-[8px] text-emerald-400 font-black uppercase tracking-widest">
-                        <i class="fas fa-link mr-1"></i> 連携準備完了
-                    </p>
-                </div>
-                <button id="confirm-alice-link"
-                    class="btn-primary w-full py-5 rounded-2xl text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-500/20">
-                    アカウントをリンク
-                </button>
-                <button onclick="closeAliceModal()"
-                    class="w-full py-4 text-slate-500 font-black text-[9px] uppercase tracking-widest">
+                <button onclick="closeConnectModal()"
+                    class="w-full py-4 text-slate-500 font-black text-[9px] uppercase tracking-widest hover:text-white transition-all">
                     キャンセル
                 </button>
             </div>
@@ -855,7 +765,7 @@
         const swapDesc = document.getElementById('swap-status-desc');
         const guideModal = document.getElementById('guideModal');
         const guideContent = document.getElementById('guide-content');
-        const aliceModal = document.getElementById('aliceModal');
+        const connectModal = document.getElementById('connectModal');
 
         let activeAddress = null;
         let activePublicKey = null;
@@ -864,22 +774,14 @@
         let currentFilter = 'all';
         let allProducts = [];
         let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const networkType = symbol.NetworkType.TEST_NET;
 
-        if (isMobile) {
-            document.getElementById('connectSssBtn').innerHTML = '<i class="fas fa-mobile-alt"></i><span class="ml-2">CONNECT ALICE</span>';
+        // Connection Modal Control
+        function openConnectModal() {
+            connectModal.classList.remove('hidden');
         }
-
-        // Alice Modal Control
-        function openAliceModal() {
-            aliceModal.classList.remove('hidden');
-        }
-        function closeAliceModal() {
-            aliceModal.classList.add('hidden');
-        }
-
-        function toggleDirectMode() {
-            const input = document.getElementById('direct-mode-input');
-            input.classList.toggle('hidden');
+        function closeConnectModal() {
+            connectModal.classList.add('hidden');
         }
 
         function connectDirectMode() {
@@ -895,16 +797,17 @@
                 localStorage.setItem('direct_private_key', pk);
 
                 const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-bolt mr-2 text-amber-400"></i>直接モード: ${shortAddr}`;
+                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-bolt mr-2 text-amber-400"></i>${shortAddr}`;
                 document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
 
                 document.getElementById('user-address-short').innerText = activeAddress;
+                document.getElementById('user-avatar').innerText = activeAddress[0];
                 userDashboard.classList.remove('hidden');
                 document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
                 document.getElementById('connect-prompt').classList.add('hidden');
 
                 showToast('直接モードで連携しました');
-                closeAliceModal();
+                closeConnectModal();
                 updateBalance();
                 renderProducts();
             } catch (e) {
@@ -912,159 +815,16 @@
             }
         }
 
-        async function autoFetchPublicKey(addr) {
-            const cleanAddr = addr.replace(/-/g, '').toUpperCase();
-            const pubKeyInput = document.getElementById('alice-publickey');
-            const pubKeyMsg = document.getElementById('pubkey-msg');
-            const checkIcon = document.getElementById('addr-check-icon');
-            const statusBox = document.getElementById('alice-connection-status');
-
-            if (cleanAddr.length !== 39) {
-                checkIcon.classList.add('hidden');
-                statusBox.classList.add('hidden');
-                return;
-            }
-
-            try {
-                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${cleanAddr}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.account.publicKey && data.account.publicKey !== '0000000000000000000000000000000000000000000000000000000000000000') {
-                        pubKeyInput.value = data.account.publicKey;
-                        pubKeyMsg.innerText = '✓ 公開鍵を自動取得しました';
-                        pubKeyMsg.className = 'text-[8px] text-emerald-400 font-bold italic';
-                        checkIcon.classList.remove('hidden');
-                        statusBox.classList.remove('hidden');
-                    } else {
-                        pubKeyMsg.innerText = '⚠ 未使用のアカウントです。手動で公開鍵を入力してください';
-                        pubKeyMsg.className = 'text-[8px] text-orange-400 font-bold italic';
-                    }
-                } else {
-                    pubKeyMsg.innerText = '⚠ ネットワーク上にアカウントが見つかりません';
-                    pubKeyMsg.className = 'text-[8px] text-red-400 font-bold italic';
-                }
-            } catch (e) {
-                console.error('Fetch PK error:', e);
-            }
-        }
-
-        function updateAliceLink(event, scheme = 'symbol') {
-            const callbackUrl = encodeURIComponent(window.location.href);
-            const uri = `${scheme}://request-account?callback=${callbackUrl}`;
-
-            // aタグのhrefを更新
-            const autoBtn = document.getElementById('alice-auto-link');
-            autoBtn.href = uri;
-
-            // JavaScriptでの遷移も試みる（保険）
-            if (scheme !== 'symbol') {
-                event.preventDefault();
-                window.location.href = uri;
-            }
-
-            log(`Requesting ALICE via ${scheme}...`, 'info');
-        }
-
-        function copyLink(type) {
-            let uri = '';
-            if (type === 'account') {
-                const callbackUrl = encodeURIComponent(window.location.href);
-                uri = `symbol://request-account?callback=${callbackUrl}`;
-            } else if (type === 'tx' && currentPayload) {
-                uri = `symbol://transaction?data=${currentPayload}`;
-            }
-
-            if (uri) {
-                navigator.clipboard.writeText(uri).then(() => {
-                    showToast('リンクをコピーしました。ブラウザのアドレス欄に貼り付けてください。');
-                });
-            }
-        }
-
-        document.getElementById('confirm-alice-link').onclick = () => {
-            const rawAddr = document.getElementById('alice-address').value.trim();
-            const rawPubKey = document.getElementById('alice-publickey').value.trim();
-            if (!rawAddr || !rawPubKey) return showToast('Address and Public Key are required');
-
-            // ハイフンを除去し大文字に統一
-            activeAddress = rawAddr.replace(/-/g, '').toUpperCase();
-            activePublicKey = rawPubKey.toUpperCase();
-
-            // 次回訪問時のために保存
-            localStorage.setItem('alice_address', activeAddress);
-            localStorage.setItem('alice_publickey', activePublicKey);
-
-            const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-            document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-mobile-alt mr-2 text-indigo-400"></i>${shortAddr}`;
-            document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
-
-            document.getElementById('user-address-short').innerText = activeAddress;
-            document.getElementById('user-avatar').innerText = activeAddress[0];
-            userDashboard.classList.remove('hidden');
-
-            document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-            document.getElementById('connect-prompt').classList.add('hidden');
-
-            log(`ALICE Linked: ${activeAddress}`, 'success');
-            showToast('ALICE Linked Successfully');
-            closeAliceModal();
-            updateBalance();
-            renderProducts();
-        };
-
-        // 自動再接続（保存されている場合）
+        // 自動再接続
         window.addEventListener('DOMContentLoaded', () => {
             checkInAppBrowser();
-            initAliceLinks();
-            // URLパラメータのチェック (ALICE callback対応)
-            const urlParams = new URLSearchParams(window.location.search);
-            const addrParam = urlParams.get('address');
-            const pubKeyParam = urlParams.get('publicKey');
 
-            if (addrParam && pubKeyParam) {
-                // ALICEからのリダイレクト戻り
-                activeAddress = addrParam.replace(/-/g, '').toUpperCase();
-                activePublicKey = pubKeyParam.toUpperCase();
-                localStorage.setItem('alice_address', activeAddress);
-                localStorage.setItem('alice_publickey', activePublicKey);
+            // 保存されたデータの読み込み
+            const savedDirectPK = localStorage.getItem('direct_private_key');
 
-                // URLからパラメータを消して綺麗にする
-                window.history.replaceState({}, document.title, window.location.pathname);
-
-                showToast('ALICE Linked via Callback!');
-                log(`ALICE Linked (Auto): ${activeAddress}`, 'success');
-            } else {
-                // 保存されたデータの読み込み
-                const savedAddr = localStorage.getItem('alice_address');
-                const savedPubKey = localStorage.getItem('alice_publickey');
-                const savedDirectPK = localStorage.getItem('direct_private_key');
-
-                if (savedDirectPK) {
-                    document.getElementById('direct-private-key').value = savedDirectPK;
-                    connectDirectMode();
-                    return;
-                }
-
-                if (isMobile && savedAddr && savedPubKey) {
-                    activeAddress = savedAddr;
-                    activePublicKey = savedPubKey;
-                }
-            }
-
-            if (activeAddress && activePublicKey) {
-                // UI更新
-                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                const connectBtn = document.getElementById('connectSssBtn');
-                if (isMobile) {
-                    connectBtn.innerHTML = `<i class="fas fa-mobile-alt mr-2 text-indigo-400"></i>${shortAddr}`;
-                } else {
-                    connectBtn.innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
-                }
-                document.getElementById('user-address-short').innerText = activeAddress;
-                userDashboard.classList.remove('hidden');
-                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                document.getElementById('connect-prompt').classList.add('hidden');
-                updateBalance();
+            if (savedDirectPK) {
+                document.getElementById('direct-private-key').value = savedDirectPK;
+                connectDirectMode();
             }
         });
 
@@ -1112,8 +872,8 @@
                                 <div class="w-10 h-10 md:w-12 md:h-12 bg-orange-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-orange-400">
                                     <i class="fas fa-mobile-alt text-lg md:text-xl"></i>
                                 </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">モバイル対応 (ALICE)</h3>
-                                <p class="text-[10px] md:text-[10px] text-slate-500 leading-relaxed">スマホ環境では ALICE ウォレットと連携。ディープリンクにより、シームレスに署名と購入が完了します。</p>
+                                <h3 class="font-black text-white uppercase tracking-widest text-xs">モバイル対応 (直接モード)</h3>
+                                <p class="text-[10px] md:text-[10px] text-slate-500 leading-relaxed">スマホ環境では「直接モード（秘密鍵）」を利用可能。ブラウザ上で安全に署名し、スムーズに取引を完了できます。</p>
                             </div>
                         </div>
                     </div>
@@ -1213,9 +973,7 @@
                     swapOverlay.style.display = 'none';
                     swapOverlay.style.opacity = '1';
                     swapProgressBar.style.width = '0%';
-                    document.getElementById('alice-manual-btn').classList.add('hidden');
-                    document.getElementById('qrcode-container').classList.add('hidden');
-                    document.getElementById('qrcode').innerHTML = ''; // QRコードをクリア
+                    document.getElementById('direct-manual-msg').classList.add('hidden');
                 }, 500);
             }, 2000);
         }
@@ -1230,7 +988,6 @@
         }
 
         let currentPayload = null;
-        let currentAliceUri = null;
 
         function checkInAppBrowser() {
             const ua = navigator.userAgent || navigator.vendor || window.opera;
@@ -1242,33 +999,6 @@
                 msg.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> LINE/Twitter等では動きません。SafariやChromeで開き直してください。';
                 document.body.appendChild(msg);
             }
-        }
-
-        function initAliceLinks() {
-            const callbackUrl = encodeURIComponent(window.location.href);
-            const autoBtn = document.getElementById('alice-auto-link');
-            if (autoBtn) {
-                autoBtn.href = `symbol://request-account?callback=${callbackUrl}`;
-            }
-        }
-
-        function launchAlice(scheme = 'symbol') {
-            if (!currentPayload) return;
-            const uri = `${scheme}://transaction?data=${currentPayload}`;
-
-            if (uri.length > 2000) {
-                showToast('取引データが大きいためQRコードを使用してください');
-                return;
-            }
-
-            window.location.href = uri;
-        }
-
-        function copyPayload() {
-            if (!currentPayload) return;
-            navigator.clipboard.writeText(currentPayload).then(() => {
-                showToast('ペイロードをコピーしました');
-            });
         }
 
         function log(msg, type = 'info') {
@@ -1460,7 +1190,6 @@
             try {
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
-                const networkType = symbol.NetworkType.TEST_NET;
                 const operatorAccount = symbol.PublicAccount.createFromPublicKey(config.operatorPublicKey, networkType);
                 operatorAddress = operatorAccount.address.plain();
 
@@ -1524,11 +1253,9 @@
         }
 
         // Wallet Logic
-        document.getElementById('connectSssBtn').onclick = async () => {
-            if (isMobile) {
-                openAliceModal();
-                return;
-            }
+        document.getElementById('connectSssBtn').onclick = () => openConnectModal();
+
+        document.getElementById('sss-connect-btn').onclick = async () => {
             log('Scanning for SSS Identity...');
             let retry = 0;
             const check = setInterval(() => {
@@ -1560,12 +1287,14 @@
 
                     log(`Identity linked: ${activeAddress}`, 'success');
                     showToast('Welcome to the Nexus');
+                    closeConnectModal();
                     updateBalance();
                     renderProducts();
                 }
                 if (++retry > 10) {
                     clearInterval(check);
                     log('SSS Identity Provider not detected', 'error');
+                    showToast('SSSが見つかりません。PCで利用してください。');
                 }
             }, 500);
         };
@@ -1584,11 +1313,11 @@
 
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
-                const networkType = symbol.NetworkType.TEST_NET;
 
                 const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
                 const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
                 const epochAdjustment = 1667250467;
+                const generationHash = config.generationHash;
 
                 showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
 
@@ -1625,7 +1354,6 @@
                 ).toAggregate(buyerAccount));
 
                 // アグリゲートトランザクションの構築
-                // ALICE 互換性のために、署名者を明示的に指定して作成
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment),
                     txs,
@@ -1634,9 +1362,6 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
-                // ALICE のために Signer を強制的に Buyer に設定
-                aggregateTx.signer = buyerAccount;
-
                 // 直接モード（秘密鍵）の場合の処理
                 if (directPrivateKey) {
                     showSwapOverlay('Signing in Browser', 'ブラウザで署名とアナウンスを実行中...', 50);
@@ -1644,43 +1369,10 @@
                     const signedTx = buyerPrivAccount.sign(aggregateTx, generationHash);
 
                     log('Direct Signing Success. Announcing...');
+                    const repositoryFactory = new symbol.RepositoryFactoryHttp('https://sym-test-01.opening-line.jp:3001');
                     await repositoryFactory.createTransactionRepository().announce(signedTx).toPromise();
 
                     checkStatus(signedTx.hash, activeAddress, p);
-                    return;
-                }
-
-                if (isMobile) {
-                    showSwapOverlay('Sign Transaction', '準備ができました。下のボタンを押して承認してください', 60);
-                    const payload = aggregateTx.serialize();
-                    currentPayload = payload;
-                    currentAliceUri = `symbol://transaction?data=${payload}`;
-
-                    const manualBtn = document.getElementById('alice-manual-btn');
-                    manualBtn.classList.remove('hidden');
-
-                    // QRコードの生成
-                    const qrContainer = document.getElementById('qrcode-container');
-                    qrContainer.classList.remove('hidden');
-                    document.getElementById('qrcode').innerHTML = '';
-                    new QRCode(document.getElementById("qrcode"), {
-                        text: currentAliceUri,
-                        width: 160,
-                        height: 160,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.L
-                    });
-
-                    // 自動起動も試みるが、基本はボタン操作を促す
-                    setTimeout(() => {
-                        launchAlice('symbol');
-                    }, 500);
-
-                    log('ALICE URI Generated. Awaiting user action.');
-                    showToast('Press the button to sign');
-
-                    checkStatus(aggregateTx.hash, activeAddress, p);
                     return;
                 }
 
