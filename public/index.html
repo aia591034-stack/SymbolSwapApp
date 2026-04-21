@@ -1436,6 +1436,15 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
+                // 【修正】Failure_Aggregate_V2_Prohibited 対策
+                // ネットワーク設定により V2 が禁止されている場合、明示的に V1 を指定します。
+                // また、内包されるトランザクションのバージョンも整合性を取ります。
+                aggregateTx.version = 1;
+                txs.forEach(tx => {
+                    tx.version = 1;
+                });
+                log(`Transaction constructed (Version: ${aggregateTx.version})`);
+
                 // 直接モード（秘密鍵）の場合の処理
                 if (directPrivateKey) {
                     showSwapOverlay('Signing in Browser', 'ブラウザで署名を実行中...', 50);
