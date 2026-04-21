@@ -160,7 +160,8 @@ app.post('/api/build_transaction', async (req, res) => {
         const sellerPubKeyObj = new symbol_pkg.PublicKey(sellerPublicKey);
 
         const networkType = facade.network.identifier;
-        const deadline = BigInt(Date.now() - 1667250467000 + 7200000); // 2 hours later
+        const epochAdjustment = 1667250467; // Testnet Epoch
+        const deadline = BigInt(Date.now() - epochAdjustment * 1000 + 7200000); // 2 hours later
 
         const txs = [];
 
@@ -180,7 +181,7 @@ app.post('/api/build_transaction', async (req, res) => {
                     type: 'transfer_transaction_v1',
                     signerPublicKey: sellerPubKeyObj,
                     recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-                    mosaics: [{ mosaicId: BigInt('0x' + p.mosaicId), amount: 1n }],
+                    mosaics: [{ mosaicId: BigInt('0x' + p.mosaicId.replace('0x','')), amount: 1n }],
                     message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
                 }));
             }
@@ -192,7 +193,7 @@ app.post('/api/build_transaction', async (req, res) => {
             signerPublicKey: buyerPubKeyObj,
             recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
             mosaics: [],
-            message: new Uint8Array([0, ...Buffer.from(p.secret)])
+            message: p.secret ? new Uint8Array([0, ...Buffer.from(p.secret)]) : new Uint8Array([0])
         }));
 
         // アグリゲートトランザクションの構築 (V2)
