@@ -1,8 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { PrivateKey } = require('symbol-sdk');
-const { SymbolFacade, KeyPair, MessageEncoder } = require('symbol-sdk/symbol');
+const { PrivateKey, SymbolFacade, KeyPair } = require('symbol-sdk');
 const multer = require('multer');
 
 const app = express();
@@ -102,12 +101,24 @@ app.post('/api/purchase_sss', async (req, res) => {
     }
 });
 
+function getProducts() {
+    try {
+        if (!fs.existsSync(DB_FILE)) {
+            return [];
+        }
+        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        return data.products || [];
+    } catch (error) {
+        console.error("Database read error:", error);
+        return [];
+    }
+}
+
 app.get('/api/products', (req, res) => {
     try {
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        console.log(`[GET] Fetching products list. Count: ${data.products.length}`);
-        // 秘密情報(secret)を削除してクライアントに送る (購入後にのみ表示するため)
-        const safeProducts = data.products.map(p => {
+        const products = getProducts();
+        console.log(`[GET] Fetching products list. Count: ${products.length}`);
+        const safeProducts = products.map(p => {
             const { secret, ...safeProduct } = p;
             return safeProduct;
         });
@@ -120,27 +131,32 @@ app.get('/api/products', (req, res) => {
 
 // 秘密情報(secret)をクライアントに送る。
 // 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
+function saveProducts(products) {
+    if (process.env.VERCEL) return; // Vercelでは保存しない
+    try {
+        fs.writeFileSync(DB_FILE, JSON.stringify({ products }, null, 2));
+    } catch (error) {
+        console.error("Database write error:", error);
+    }
+}
+
 app.get('/api/products/:id/secret', (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const requesterAddress = req.query.address; // クエリパラメータから取得
+        const requesterAddress = req.query.address; 
         
         console.log(`[GET] Fetching secret for product ID: ${id} (requested by: ${requesterAddress})`);
         
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        const product = data.products.find(p => String(p.id) === String(id));
+        const products = getProducts();
+        const product = products.find(p => String(p.id) === String(id));
         
         if (!product) {
             return res.status(404).json({ error: "商品が見つかりません" });
         }
 
-        // 管理者(A)のアドレスを計算
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
 
-        // 購入の簡易検証 (デモ用: 運営、出品者、またはリクエスト者がいる場合に許可)
-        // 本番環境ではここでブロックチェーン上のトランザクション履歴を確認したり、署名検証を行うべきです。
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
-             // 接続されていない場合は、URLを隠したメッセージを返す（購入ボタン表示用には必要）
              return res.json({ secret: "購入後に公開されます" });
         }
         
@@ -152,25 +168,20 @@ app.get('/api/products/:id/secret', (req, res) => {
     }
 });
 
-// ファイルをダウンロードするためのプライベートなエンドポイント
 app.get('/api/products/:id/download', (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const requesterAddress = req.query.address;
         
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        const product = data.products.find(p => String(p.id) === String(id));
+        const products = getProducts();
+        const product = products.find(p => String(p.id) === String(id));
         
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        // セキュリティチェック (簡易版)
-        // 本来は購入済みであることをDB等で確認すべき
         if (!requesterAddress) {
             return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
         }
 
-        // secret からファイルパスを特定
-        // secret 形式: "URL: http://localhost:3000/uploads/filename"
         const secretStr = product.secret.replace('URL: ', '');
         if (secretStr.startsWith('http')) {
             const filename = path.basename(secretStr);
@@ -216,7 +227,7 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
         const host = req.get('host');
         const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
 
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
+        const products = getProducts();
         const newProduct = {
             id: Date.now(),
             title,
@@ -229,10 +240,8 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             fileName: file.originalname,
             secret: `URL: ${secretUrl}`
         };
-        data.products.push(newProduct);
-        if (!process.env.VERCEL) {
-            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        }
+        products.push(newProduct);
+        saveProducts(products);
         res.json({ success: true, product: newProduct });
     } catch (error) {
         console.error(error);
@@ -245,13 +254,12 @@ app.patch('/api/products/:id', (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { title, price, description, imageUrl, requesterAddress } = req.body;
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        const index = data.products.findIndex(p => p.id === id);
+        const products = getProducts();
+        const index = products.findIndex(p => p.id === id);
 
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
-        // 権限チェック (出品者本人か運営Aか)
-        const product = data.products[index];
+        const product = products[index];
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
         
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
@@ -263,37 +271,31 @@ app.patch('/api/products/:id', (req, res) => {
         if (description) product.description = description;
         if (imageUrl) product.imageUrl = imageUrl;
 
-        if (!process.env.VERCEL) {
-            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        }
+        saveProducts(products);
         res.json({ success: true, product });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// 商品の削除
 app.delete('/api/products/:id', (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { requesterAddress } = req.body;
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        const index = data.products.findIndex(p => p.id === id);
+        const products = getProducts();
+        const index = products.findIndex(p => p.id === id);
 
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
-        // 権限チェック
-        const product = data.products[index];
+        const product = products[index];
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
 
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
             return res.status(403).json({ error: "削除権限がありません" });
         }
 
-        data.products.splice(index, 1);
-        if (!process.env.VERCEL) {
-            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        }
+        products.splice(index, 1);
+        saveProducts(products);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
