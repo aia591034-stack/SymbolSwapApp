@@ -251,11 +251,18 @@
             <!-- Mobile Action Area -->
             <div id="alice-manual-btn"
                 class="hidden mt-8 flex flex-col items-center space-y-6 w-full animate-in zoom-in duration-500">
-                <a id="alice-link" href="#"
-                    class="w-full btn-primary px-8 py-6 rounded-[2rem] text-sm font-black uppercase tracking-[0.2em] text-white shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-4 border-2 border-white/20">
-                    <i class="fas fa-fingerprint text-2xl"></i>
-                    <span>OPEN ALICE TO SIGN</span>
-                </a>
+
+                <div class="w-full space-y-3">
+                    <button onclick="launchAlice('symbol')"
+                        class="w-full btn-primary px-8 py-6 rounded-[2rem] text-sm font-black uppercase tracking-[0.2em] text-white shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-4 border-2 border-white/20">
+                        <i class="fas fa-fingerprint text-2xl"></i>
+                        <span>OPEN ALICE</span>
+                    </button>
+                    <button onclick="launchAlice('web+symbol')"
+                        class="w-full py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-400 transition-all">
+                        起動しない場合はこちらを試す
+                    </button>
+                </div>
 
                 <div class="flex flex-col items-center space-y-4">
                     <div id="qrcode-container" class="bg-white p-4 rounded-3xl shadow-2xl hidden">
@@ -264,14 +271,33 @@
                             ALICE</p>
                     </div>
 
+                    <div class="bg-white/5 p-6 rounded-[2rem] border border-white/10 w-full">
+                        <p class="text-[10px] text-indigo-400 font-black mb-4 text-center uppercase tracking-widest">
+                            【ALICEでのスキャン方法】</p>
+                        <ul class="text-[9px] text-slate-400 space-y-3 font-medium">
+                            <li class="flex items-start space-x-3">
+                                <span
+                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">1</span>
+                                <span>ALICEのホーム画面（残高が出ている画面）を表示</span>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span
+                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">2</span>
+                                <span><b>画面右上の [ ]（カメラのアイコン）</b>をタップ</span>
+                            </li>
+                            <li class="flex items-start space-x-3">
+                                <span
+                                    class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">3</span>
+                                <span>カメラが起動したら、このQRコードを読み取る</span>
+                            </li>
+                        </ul>
+                    </div>
+
                     <div class="flex flex-col items-center space-y-2">
                         <button onclick="copyPayload()"
                             class="text-[10px] font-black text-indigo-400 uppercase tracking-widest py-2 px-4 bg-white/5 rounded-full border border-white/5">
-                            <i class="fas fa-copy mr-2"></i> Copy Data
+                            <i class="fas fa-copy mr-2"></i> Copy Data (Backup)
                         </button>
-                        <p class="text-[9px] text-slate-500 text-center max-w-[240px] leading-relaxed">
-                            ボタンを押してもALICEが開かない場合は、<br>上のボタンを再度タップするか、QRコードをお試しください。
-                        </p>
                     </div>
                 </div>
             </div>
@@ -701,21 +727,33 @@
             <div class="space-y-6">
                 <div class="bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20">
                     <p class="text-[9px] text-indigo-400 font-bold leading-relaxed uppercase">
-                        <i class="fas fa-info-circle mr-1"></i> ALICEの「設定 > プロフィール」または「受信」画面からコピーして貼り付けてください。
+                        <i class="fas fa-info-circle mr-1"></i> 連携するアカウントのアドレスを入力してください。
                     </p>
                 </div>
                 <div class="space-y-3">
                     <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Your
                         Address</label>
-                    <input type="text" id="alice-address" placeholder="T..."
-                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
+                    <div class="relative">
+                        <input type="text" id="alice-address" placeholder="T..."
+                            oninput="autoFetchPublicKey(this.value)"
+                            class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase pr-12">
+                        <div id="addr-check-icon" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-check-circle text-emerald-400"></i>
+                        </div>
+                    </div>
                 </div>
                 <div class="space-y-3">
                     <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Your Public
                         Key</label>
                     <input type="text" id="alice-publickey" placeholder="62B..."
                         class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
-                    <p class="text-[8px] text-slate-500 italic">※ 公開鍵はALICEのプロフィール画面で確認できます</p>
+                    <p id="pubkey-msg" class="text-[8px] text-slate-500 italic">※ アドレスを入力すると自動取得を試みます</p>
+                </div>
+                <div id="alice-connection-status"
+                    class="hidden bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20 text-center">
+                    <p class="text-[8px] text-emerald-400 font-black uppercase tracking-widest">
+                        <i class="fas fa-link mr-1"></i> Ready to Connect
+                    </p>
                 </div>
                 <button id="confirm-alice-link"
                     class="btn-primary w-full py-5 rounded-2xl text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-500/20">
@@ -774,6 +812,42 @@
         }
         function closeAliceModal() {
             aliceModal.classList.add('hidden');
+        }
+
+        async function autoFetchPublicKey(addr) {
+            const cleanAddr = addr.replace(/-/g, '').toUpperCase();
+            const pubKeyInput = document.getElementById('alice-publickey');
+            const pubKeyMsg = document.getElementById('pubkey-msg');
+            const checkIcon = document.getElementById('addr-check-icon');
+            const statusBox = document.getElementById('alice-connection-status');
+
+            if (cleanAddr.length !== 39) {
+                checkIcon.classList.add('hidden');
+                statusBox.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${cleanAddr}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.account.publicKey && data.account.publicKey !== '0000000000000000000000000000000000000000000000000000000000000000') {
+                        pubKeyInput.value = data.account.publicKey;
+                        pubKeyMsg.innerText = '✓ 公開鍵を自動取得しました';
+                        pubKeyMsg.className = 'text-[8px] text-emerald-400 font-bold italic';
+                        checkIcon.classList.remove('hidden');
+                        statusBox.classList.remove('hidden');
+                    } else {
+                        pubKeyMsg.innerText = '⚠ 未使用のアカウントです。手動で公開鍵を入力してください';
+                        pubKeyMsg.className = 'text-[8px] text-orange-400 font-bold italic';
+                    }
+                } else {
+                    pubKeyMsg.innerText = '⚠ ネットワーク上にアカウントが見つかりません';
+                    pubKeyMsg.className = 'text-[8px] text-red-400 font-bold italic';
+                }
+            } catch (e) {
+                console.error('Fetch PK error:', e);
+            }
         }
 
         document.getElementById('confirm-alice-link').onclick = () => {
@@ -987,6 +1061,14 @@
         }
 
         let currentPayload = null;
+        let currentAliceUri = null;
+
+        function launchAlice(scheme = 'symbol') {
+            if (!currentPayload) return;
+            const uri = `${scheme}://transaction?data=${currentPayload}`;
+            window.location.href = uri;
+        }
+
         function copyPayload() {
             if (!currentPayload) return;
             navigator.clipboard.writeText(currentPayload).then(() => {
@@ -1347,8 +1429,8 @@
                     networkType
                 ).toAggregate(buyerAccount));
 
-                // NFTが含まれる場合は、連署が必要なため Bonded にするか、出品者が事前に署名している必要があります。
-                // ここではデモとして Complete で構築しますが、実際には出品者の連署が必要です。
+                // アグリゲートトランザクションの構築
+                // ALICE 互換性のために、署名者を明示的に指定して作成
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment),
                     txs,
@@ -1357,23 +1439,24 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
+                // ALICE のために Signer を強制的に Buyer に設定（v2 SDK の内部プロパティ調整）
+                aggregateTx.signer = buyerAccount;
+
                 if (isMobile) {
                     showSwapOverlay('Sign Transaction', '準備ができました。下のボタンを押して承認してください', 60);
                     const payload = aggregateTx.serialize();
                     currentPayload = payload;
-                    const aliceUri = `symbol://transaction?data=${payload}`;
+                    currentAliceUri = `symbol://transaction?data=${payload}`;
 
                     const manualBtn = document.getElementById('alice-manual-btn');
-                    const aliceLink = document.getElementById('alice-link');
                     manualBtn.classList.remove('hidden');
-                    aliceLink.href = aliceUri;
 
                     // QRコードの生成
                     const qrContainer = document.getElementById('qrcode-container');
                     qrContainer.classList.remove('hidden');
                     document.getElementById('qrcode').innerHTML = '';
                     new QRCode(document.getElementById("qrcode"), {
-                        text: aliceUri,
+                        text: currentAliceUri,
                         width: 160,
                         height: 160,
                         colorDark: "#000000",
@@ -1383,7 +1466,7 @@
 
                     // 自動起動も試みるが、基本はボタン操作を促す
                     setTimeout(() => {
-                        window.location.href = aliceUri;
+                        launchAlice('symbol');
                     }, 500);
 
                     log('ALICE URI Generated. Awaiting user action.');
