@@ -2,8 +2,13 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
+
+// ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
 import { PrivateKey } from 'symbol-sdk';
-import { SymbolFacade, KeyPair } from 'symbol-sdk/symbol';
+import * as symbol_pkg from 'symbol-sdk/symbol';
+const { SymbolFacade, KeyPair } = symbol_pkg;
 import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
