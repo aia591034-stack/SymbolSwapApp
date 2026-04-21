@@ -2,7 +2,8 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PrivateKey, SymbolFacade, KeyPair } from 'symbol-sdk';
+import { PrivateKey, SymbolFacade } from 'symbol-sdk';
+import { KeyPair } from 'symbol-sdk/symbol';
 import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
