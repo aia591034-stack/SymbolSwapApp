@@ -688,29 +688,29 @@
                 <p class="text-[10px] text-slate-500 font-medium mt-2">ウォレットと連携して取引を開始します</p>
             </div>
             <div class="space-y-6">
-                <!-- PC Options -->
-                <div id="sss-option" class="space-y-4">
+                <!-- PC Options (Hidden on Mobile) -->
+                <div id="sss-option" class="space-y-4 hidden md:block">
                     <button id="sss-connect-btn"
                         class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 transition-all border-2 border-white/10">
                         <i class="fas fa-fingerprint text-lg"></i>
                         <span>SSS で連携 (PC)</span>
                     </button>
                     <p class="text-[8px] text-slate-500 text-center uppercase tracking-widest">Chrome 拡張機能が必要です</p>
-                </div>
 
-                <div class="relative py-4 flex items-center">
-                    <div class="flex-grow border-t border-white/10"></div>
-                    <span
-                        class="flex-shrink mx-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">または</span>
-                    <div class="flex-grow border-t border-white/10"></div>
+                    <div class="relative py-4 flex items-center">
+                        <div class="flex-grow border-t border-white/10"></div>
+                        <span
+                            class="flex-shrink mx-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">または</span>
+                        <div class="flex-grow border-t border-white/10"></div>
+                    </div>
                 </div>
 
                 <!-- Direct Mode / Mobile Option -->
                 <div class="bg-amber-500/5 p-6 rounded-[2rem] border border-amber-500/20 space-y-4">
                     <div class="flex flex-col items-center space-y-3">
-                        <p class="text-[10px] text-amber-500 font-black uppercase tracking-widest">直接モード (モバイル推奨)</p>
+                        <p class="text-[10px] text-amber-500 font-black uppercase tracking-widest">直接モード (秘密鍵でサイン)</p>
                         <p class="text-[9px] text-slate-400 text-center leading-relaxed">
-                            秘密鍵を使用してブラウザ内で直接署名します。
+                            秘密鍵を入力して連携します。スマホでも確実に動作します。
                         </p>
                     </div>
 
@@ -718,12 +718,28 @@
                         <div class="space-y-2">
                             <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">秘密鍵
                                 (64文字)</label>
-                            <input type="password" id="direct-private-key" placeholder="PRIVATE KEY (64 CHARS)"
-                                class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white">
+                            <div class="relative">
+                                <input type="password" id="direct-private-key" placeholder="PRIVATE KEY (64 CHARS)"
+                                    oninput="previewAddress(this.value)"
+                                    class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white pr-12">
+                                <button onclick="togglePkVisibility()"
+                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-all">
+                                    <i id="pk-eye-icon" class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
+
+                        <!-- Address Preview -->
+                        <div id="address-preview-container"
+                            class="hidden bg-white/5 p-4 rounded-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <p class="text-[8px] text-amber-500 font-black uppercase tracking-widest mb-1">導出されるアドレス</p>
+                            <p id="preview-address-val" class="text-[10px] font-bold text-white break-all font-mono">
+                            </p>
+                        </div>
+
                         <button id="confirm-direct-link" onclick="connectDirectMode()"
                             class="w-full bg-amber-600 hover:bg-amber-500 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-amber-600/20 active:scale-95 transition-all">
-                            直接モードで連携
+                            連携を確定する
                         </button>
                         <p class="text-[7px] text-slate-500 leading-relaxed text-center italic">
                             ※ 秘密鍵は署名にのみ使用され、サーバーには送信されません。
@@ -782,6 +798,38 @@
         }
         function closeConnectModal() {
             connectModal.classList.add('hidden');
+        }
+
+        function togglePkVisibility() {
+            const pkInput = document.getElementById('direct-private-key');
+            const eyeIcon = document.getElementById('pk-eye-icon');
+            if (pkInput.type === 'password') {
+                pkInput.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                pkInput.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        function previewAddress(pk) {
+            const previewContainer = document.getElementById('address-preview-container');
+            const previewVal = document.getElementById('preview-address-val');
+
+            const cleanPk = pk.trim();
+            if (cleanPk.length === 64) {
+                try {
+                    const account = symbol.Account.createFromPrivateKey(cleanPk, networkType);
+                    previewVal.innerText = account.address.plain();
+                    previewContainer.classList.remove('hidden');
+                } catch (e) {
+                    previewContainer.classList.add('hidden');
+                }
+            } else {
+                previewContainer.classList.add('hidden');
+            }
         }
 
         function connectDirectMode() {
