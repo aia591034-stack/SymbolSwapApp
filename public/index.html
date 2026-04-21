@@ -781,6 +781,36 @@
                         class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
                     <p id="pubkey-msg" class="text-[8px] text-slate-500 italic">※ アドレスを入力すると自動取得を試みます</p>
                 </div>
+
+                <div class="relative py-4 flex items-center">
+                    <div class="flex-grow border-t border-white/10"></div>
+                    <span
+                        class="flex-shrink mx-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">または（最終手段）</span>
+                    <div class="flex-grow border-t border-white/10"></div>
+                </div>
+
+                <div class="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20 space-y-4">
+                    <div class="flex flex-col items-center space-y-2">
+                        <p class="text-[8px] text-amber-500 font-black uppercase tracking-widest">ブラウザ完結モード</p>
+                        <button onclick="toggleDirectMode()"
+                            class="w-full py-3 bg-amber-500/10 rounded-xl text-amber-500 font-black text-[9px] uppercase tracking-[0.2em] border border-amber-500/20 transition-all hover:bg-amber-500/20">
+                            <i class="fas fa-key mr-2"></i> 秘密鍵で直接サイン
+                        </button>
+                    </div>
+
+                    <div id="direct-mode-input" class="hidden space-y-3">
+                        <input type="password" id="direct-private-key" placeholder="秘密鍵 (64文字)"
+                            class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white">
+                        <p class="text-[7px] text-slate-500 leading-relaxed italic">
+                            ※ 秘密鍵は署名にのみ使用され、サーバーには送信されません。
+                        </p>
+                        <button id="confirm-direct-link" onclick="connectDirectMode()"
+                            class="w-full bg-amber-600 text-white py-4 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                            直接モードで連携
+                        </button>
+                    </div>
+                </div>
+
                 <div id="alice-connection-status"
                     class="hidden bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20 text-center">
                     <p class="text-[8px] text-emerald-400 font-black uppercase tracking-widest">
@@ -829,6 +859,7 @@
 
         let activeAddress = null;
         let activePublicKey = null;
+        let directPrivateKey = null; // 直接モード用
         let operatorAddress = null;
         let currentFilter = 'all';
         let allProducts = [];
@@ -844,6 +875,41 @@
         }
         function closeAliceModal() {
             aliceModal.classList.add('hidden');
+        }
+
+        function toggleDirectMode() {
+            const input = document.getElementById('direct-mode-input');
+            input.classList.toggle('hidden');
+        }
+
+        function connectDirectMode() {
+            const pk = document.getElementById('direct-private-key').value.trim();
+            if (pk.length !== 64) return showToast('秘密鍵は64文字で入力してください');
+
+            try {
+                const account = symbol.Account.createFromPrivateKey(pk, networkType);
+                activeAddress = account.address.plain();
+                activePublicKey = account.publicKey;
+                directPrivateKey = pk;
+
+                localStorage.setItem('direct_private_key', pk);
+
+                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-bolt mr-2 text-amber-400"></i>直接モード: ${shortAddr}`;
+                document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+
+                document.getElementById('user-address-short').innerText = activeAddress;
+                userDashboard.classList.remove('hidden');
+                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('connect-prompt').classList.add('hidden');
+
+                showToast('直接モードで連携しました');
+                closeAliceModal();
+                updateBalance();
+                renderProducts();
+            } catch (e) {
+                showToast('秘密鍵が正しくありません');
+            }
         }
 
         async function autoFetchPublicKey(addr) {
@@ -971,6 +1037,14 @@
                 // 保存されたデータの読み込み
                 const savedAddr = localStorage.getItem('alice_address');
                 const savedPubKey = localStorage.getItem('alice_publickey');
+                const savedDirectPK = localStorage.getItem('direct_private_key');
+
+                if (savedDirectPK) {
+                    document.getElementById('direct-private-key').value = savedDirectPK;
+                    connectDirectMode();
+                    return;
+                }
+
                 if (isMobile && savedAddr && savedPubKey) {
                     activeAddress = savedAddr;
                     activePublicKey = savedPubKey;
@@ -1560,8 +1634,21 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
-                // ALICE のために Signer を強制的に Buyer に設定（v2 SDK の内部プロパティ調整）
+                // ALICE のために Signer を強制的に Buyer に設定
                 aggregateTx.signer = buyerAccount;
+
+                // 直接モード（秘密鍵）の場合の処理
+                if (directPrivateKey) {
+                    showSwapOverlay('Signing in Browser', 'ブラウザで署名とアナウンスを実行中...', 50);
+                    const buyerPrivAccount = symbol.Account.createFromPrivateKey(directPrivateKey, networkType);
+                    const signedTx = buyerPrivAccount.sign(aggregateTx, generationHash);
+
+                    log('Direct Signing Success. Announcing...');
+                    await repositoryFactory.createTransactionRepository().announce(signedTx).toPromise();
+
+                    checkStatus(signedTx.hash, activeAddress, p);
+                    return;
+                }
 
                 if (isMobile) {
                     showSwapOverlay('Sign Transaction', '準備ができました。下のボタンを押して承認してください', 60);
