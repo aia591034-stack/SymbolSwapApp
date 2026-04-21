@@ -278,19 +278,20 @@
                             <li class="flex items-start space-x-3">
                                 <span
                                     class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">1</span>
-                                <span>ALICEのホーム画面（残高が出ている画面）を表示</span>
+                                <span>ALICEの<b>ホーム画面</b>を表示</span>
                             </li>
                             <li class="flex items-start space-x-3">
                                 <span
                                     class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">2</span>
-                                <span><b>画面右上の [ ]（カメラのアイコン）</b>をタップ</span>
+                                <span>画面右上にある <b>[ ] または QRのアイコン</b> をタップ</span>
                             </li>
                             <li class="flex items-start space-x-3">
                                 <span
                                     class="bg-indigo-500 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[8px]">3</span>
-                                <span>カメラが起動したら、このQRコードを読み取る</span>
+                                <span>カメラで読み取るか、右下のアイコンからスクショ画像を選択</span>
                             </li>
                         </ul>
+                        <p class="text-[7px] text-slate-600 mt-4 text-center">※ ALICEの設定が「Testnet」になっていることを確認してください</p>
                     </div>
 
                     <div class="flex flex-col items-center space-y-2">
@@ -1066,7 +1067,19 @@
         function launchAlice(scheme = 'symbol') {
             if (!currentPayload) return;
             const uri = `${scheme}://transaction?data=${currentPayload}`;
-            window.location.href = uri;
+
+            if (uri.length > 2000) {
+                showToast('取引データが大きいためQRコードを使用してください');
+                return;
+            }
+
+            // aタグを生成して確実にクリックイベントを発生させる
+            const link = document.createElement('a');
+            link.href = uri;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function copyPayload() {
