@@ -247,12 +247,16 @@
             </h2>
             <p id="swap-status-desc" class="text-slate-400 text-xs md:text-sm font-medium leading-relaxed">
                 ブロックチェーン上で資産の交換を検証しています...</p>
-            <div id="alice-manual-btn" class="hidden mt-6">
+            <div id="alice-manual-btn" class="hidden mt-6 flex flex-col items-center space-y-4">
                 <a id="alice-link" href="#"
                     class="btn-primary px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-500/20 inline-flex items-center space-x-2">
                     <i class="fas fa-external-link-alt"></i>
-                    <span>ALICE で署名する</span>
+                    <span>ALICE を起動する</span>
                 </a>
+                <button onclick="copyPayload()"
+                    class="text-[9px] font-black text-indigo-400/70 uppercase tracking-widest hover:text-indigo-400 transition-all">
+                    <i class="fas fa-copy mr-1"></i> ペイロードをコピー (手動用)
+                </button>
             </div>
         </div>
         <div class="mt-12 w-48 md:w-64 bg-white/5 h-1 rounded-full overflow-hidden">
@@ -962,6 +966,14 @@
             }, 3000);
         }
 
+        let currentPayload = null;
+        function copyPayload() {
+            if (!currentPayload) return;
+            navigator.clipboard.writeText(currentPayload).then(() => {
+                showToast('ペイロードをコピーしました');
+            });
+        }
+
         function log(msg, type = 'info') {
             const div = document.createElement('div');
             const now = new Date();
@@ -1328,9 +1340,10 @@
                 if (isMobile) {
                     showSwapOverlay('Sign Transaction', 'ALICEで署名とアナウンスを行ってください', 60);
                     const payload = aggregateTx.serialize();
+                    currentPayload = payload; // 手動コピー用に保持
                     const aliceUri = `symbol://transaction?data=${payload}`;
 
-                    // 手動ボタンを表示（自動起動が失敗する場合の予備）
+                    // 手動ボタンを表示
                     const manualBtn = document.getElementById('alice-manual-btn');
                     const aliceLink = document.getElementById('alice-link');
                     manualBtn.classList.remove('hidden');
