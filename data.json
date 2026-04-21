@@ -10,6 +10,7 @@
       "fileName": "ethereal_landscapes.zip",
       "imageUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&auto=format&fit=crop&q=80",
       "description": "息を呑むような大自然の瞬間を捉えた、高解像度（8K）写真コレクション。デスクトップ壁紙やクリエイティブな制作活動に最適です。",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/sample_art.png"
     },
     {
@@ -22,6 +23,7 @@
       "fileName": "minimal_architecture_v1.pdf",
       "imageUrl": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1200&auto=format&fit=crop&q=80",
       "description": "現代建築の究極の機能美を追求した写真と解説。ミニマリズムを愛するすべてのデザイナーに贈る一冊です。",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/sample_guide.pdf"
     },
     {
@@ -34,6 +36,7 @@
       "fileName": "abstract_flow_loop.mp4",
       "imageUrl": "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=1200&auto=format&fit=crop&q=80",
       "description": "色彩と光が織りなす幻想的なループ動画素材。VJや配信の背景、展示映像として圧倒的な存在感を放ちます。",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/sample_art.png"
     },
     {
@@ -46,6 +49,7 @@
       "fileName": "urban_nocturne_pack.zip",
       "imageUrl": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200&auto=format&fit=crop&q=80",
       "description": "眠らない街の光と影をドラマチックに切り取った写真セット。サイバーパンクな雰囲気を感じさせる独自のカラーグレーディングが特徴です。",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/sample_art.png"
     },
     {
@@ -58,6 +62,7 @@
       "fileName": "zen_garden_meditation.zip",
       "imageUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80",
       "description": "静寂な庭園の風景と環境音を組み合わせた、究極のリラクゼーション体験。瞑想や集中したい時のBGMとして最適です。",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/sample_guide.pdf"
     },
     {
@@ -70,6 +75,7 @@
       "description": "gazou",
       "imageUrl": "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800",
       "fileName": "ã¹ã¯ãªã¼ã³ã·ã§ãã 2025-10-25 003531.png",
+      "saleType": "file",
       "secret": "URL: http://localhost:3000/uploads/c463f231b91f4b129cb7c291f3f9969f"
     }
   ]

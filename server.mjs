@@ -17,11 +17,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Vercelなどの読み取り専用環境に対応するため、一時ディレクトリを使用
-const UPLOAD_DIR = process.env.VERCEL ? '/tmp' : 'uploads/';
-const upload = multer({ dest: UPLOAD_DIR });
-
-app.use(express.static('public'));
+// 絶対パスを使用して静的ファイルを配信
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // ヘルスチェック用のテストエンドポイント
@@ -227,7 +224,7 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/products', upload.single('file'), async (req, res) => {
     try {
-        const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl } = req.body;
+        const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl, saleType, mosaicId } = req.body;
         const file = req.file;
         if (!file) return res.status(400).json({ error: "ファイルがありません" });
 
@@ -253,6 +250,8 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             description: description || "",
             imageUrl: imageUrl || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop&q=60",
             fileName: file.originalname,
+            saleType: saleType || "file",
+            mosaicId: mosaicId || null,
             secret: `URL: ${secretUrl}`
         };
         products.push(newProduct);
@@ -268,7 +267,7 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 app.patch('/api/products/:id', (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { title, price, description, imageUrl, requesterAddress } = req.body;
+        const { title, price, description, imageUrl, requesterAddress, saleType, mosaicId } = req.body;
         const products = getProducts();
         const index = products.findIndex(p => p.id === id);
 
@@ -285,6 +284,8 @@ app.patch('/api/products/:id', (req, res) => {
         if (price) product.price = parseInt(price);
         if (description) product.description = description;
         if (imageUrl) product.imageUrl = imageUrl;
+        if (saleType) product.saleType = saleType;
+        if (mosaicId !== undefined) product.mosaicId = mosaicId;
 
         saveProducts(products);
         res.json({ success: true, product });

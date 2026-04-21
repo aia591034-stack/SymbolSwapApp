@@ -472,6 +472,34 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                             <div class="space-y-3">
                                 <label
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Sale
+                                    Type</label>
+                                <div class="relative">
+                                    <select id="pSaleType" onchange="toggleMosaicInput()"
+                                        class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 outline-none font-black text-[10px] appearance-none tracking-widest text-white">
+                                        <option value="file">DIGITAL FILE ONLY</option>
+                                        <option value="nft">NFT (MOSAIC) ONLY</option>
+                                        <option value="both">FILE + NFT BUNDLE</option>
+                                    </select>
+                                    <i
+                                        class="fas fa-chevron-down absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
+                                </div>
+                            </div>
+                            <div id="mosaic-id-container" class="space-y-3 hidden">
+                                <label
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Mosaic
+                                    ID</label>
+                                <input type="text" id="pMosaicId" placeholder="72C0212E67A08BCE"
+                                    oninput="validateMosaic(this.value)"
+                                    class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 outline-none transition-all font-black text-indigo-500 text-sm">
+                                <p id="mosaic-valid-msg" class="text-[8px] font-bold uppercase tracking-widest hidden">
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                            <div class="space-y-3">
+                                <label
                                     class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Price</label>
                                 <div class="relative">
                                     <input type="number" id="pPrice" value="10"
@@ -754,6 +782,37 @@
             guideModal.classList.add('hidden');
         }
 
+        function toggleMosaicInput() {
+            const saleType = document.getElementById('pSaleType').value;
+            const container = document.getElementById('mosaic-id-container');
+            if (saleType === 'nft' || saleType === 'both') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        async function validateMosaic(id) {
+            const msg = document.getElementById('mosaic-valid-msg');
+            if (!id || id.length !== 16) {
+                msg.classList.add('hidden');
+                return;
+            }
+            msg.classList.remove('hidden', 'text-emerald-400', 'text-red-400');
+            msg.innerText = 'VALIDATING MOSAIC...';
+            msg.classList.add('text-slate-500');
+
+            const info = await getMosaicInfo(id);
+            msg.classList.remove('text-slate-500');
+            if (info) {
+                msg.innerText = '✓ MOSAIC DETECTED';
+                msg.classList.add('text-emerald-400');
+            } else {
+                msg.innerText = '✗ MOSAIC NOT FOUND';
+                msg.classList.add('text-red-400');
+            }
+        }
+
         // Swap Overlay Control
         function showSwapOverlay(title, desc, progress) {
             swapOverlay.style.display = 'flex';
@@ -828,6 +887,18 @@
             }
         }
 
+        async function getMosaicInfo(mosaicId) {
+            try {
+                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/mosaics/${mosaicId}`);
+                if (res.ok) {
+                    return await res.json();
+                }
+            } catch (e) {
+                console.error('Mosaic info fetch error:', e);
+            }
+            return null;
+        }
+
         // Search & Filter
         function filterProducts(type) {
             currentFilter = type;
@@ -895,7 +966,8 @@
                                 <div class="flex items-center space-x-2 md:space-x-3 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2 md:mb-3">
                                     <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'OWNED BY YOU' : 'AVAILABLE'}</span>
                                     <span class="text-white/40">•</span>
-                                    <span class="text-white/60">${p.fileName ? p.fileName.split('.').pop().toUpperCase() : 'ASSET'}</span>
+                                    <span class="text-white/60">${p.saleType === 'nft' ? 'NFT' : (p.saleType === 'both' ? 'FILE + NFT' : 'FILE')}</span>
+                                    ${p.mosaicId ? `<span class="text-white/40">•</span><span class="text-indigo-400">ID: ${p.mosaicId}</span>` : ''}
                                 </div>
                                 <h3 class="text-xl md:text-2xl font-black text-white tracking-tighter truncate">${p.title}</h3>
                             </div>
@@ -1078,25 +1150,43 @@
 
                 showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
 
-                const txPayment = symbol.TransferTransaction.create(
+                const txs = [];
+
+                // 1. 代金の支払い (Buyer -> Seller)
+                txs.push(symbol.TransferTransaction.create(
                     symbol.Deadline.create(epochAdjustment),
                     sellerAccount.address,
                     [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
                     symbol.PlainMessage.create('Nexus Swap: ' + p.title),
                     networkType
-                ).toAggregate(buyerAccount);
+                ).toAggregate(buyerAccount));
 
-                const txData = symbol.TransferTransaction.create(
+                // 2. NFTの移転 (Seller -> Buyer) - NFT販売または両方の場合
+                if (p.saleType === 'nft' || p.saleType === 'both') {
+                    if (!p.mosaicId) throw new Error('Mosaic ID is missing for this NFT asset');
+                    txs.push(symbol.TransferTransaction.create(
+                        symbol.Deadline.create(epochAdjustment),
+                        buyerAccount.address,
+                        [new symbol.Mosaic(new symbol.MosaicId(p.mosaicId), symbol.UInt64.fromUint(1))],
+                        symbol.PlainMessage.create('NFT Transfer: ' + p.title),
+                        networkType
+                    ).toAggregate(sellerAccount));
+                }
+
+                // 3. メッセージ（秘密情報/購入証跡）の記録 (Buyer -> Buyer)
+                txs.push(symbol.TransferTransaction.create(
                     symbol.Deadline.create(epochAdjustment),
                     buyerAccount.address,
                     [],
                     symbol.PlainMessage.create(secret),
                     networkType
-                ).toAggregate(buyerAccount);
+                ).toAggregate(buyerAccount));
 
+                // NFTが含まれる場合は、連署が必要なため Bonded にするか、出品者が事前に署名している必要があります。
+                // ここではデモとして Complete で構築しますが、実際には出品者の連署が必要です。
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment),
-                    [txPayment, txData],
+                    txs,
                     networkType,
                     [],
                     symbol.UInt64.fromUint(1000000)
@@ -1172,15 +1262,23 @@
             const title = document.getElementById('pTitle').value;
             const price = document.getElementById('pPrice').value;
             const imageUrl = document.getElementById('pImageUrl').value;
+            const saleType = document.getElementById('pSaleType').value;
+            const mosaicId = document.getElementById('pMosaicId').value;
             const fileInput = document.getElementById('pFile');
 
             if (!title || !fileInput.files[0] || !activeAddress) {
                 return showToast('Deployment parameters incomplete');
             }
 
+            if ((saleType === 'nft' || saleType === 'both') && !mosaicId) {
+                return showToast('Mosaic ID is required for NFT sale');
+            }
+
             const formData = new FormData();
             formData.append('title', title);
             formData.append('price', price);
+            formData.append('saleType', saleType);
+            formData.append('mosaicId', mosaicId);
             formData.append('seller', 'Creator');
             formData.append('sellerAddress', activeAddress);
             formData.append('sellerPublicKey', activePublicKey);
@@ -1194,6 +1292,7 @@
                 loadProducts();
                 document.getElementById('pTitle').value = '';
                 document.getElementById('pImageUrl').value = '';
+                document.getElementById('pMosaicId').value = '';
                 document.getElementById('pFile').value = '';
                 document.getElementById('file-name-display').innerText = 'Drop digital file';
             } else {
