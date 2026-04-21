@@ -311,12 +311,18 @@
                         class="hidden bg-red-500/10 text-red-500 border border-red-500/20 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase">
                         管理者
                     </span>
-                    <button id="connectSssBtn"
-                        class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
-                        <i class="fas fa-wallet"></i>
-                        <span class="hidden xs:inline">ウォレットを連携</span>
-                        <span class="xs:hidden">連携</span>
-                    </button>
+                    <div class="flex items-center">
+                        <button id="connectSssBtn"
+                            class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
+                            <i class="fas fa-wallet"></i>
+                            <span class="hidden xs:inline">ウォレットを連携</span>
+                            <span class="xs:hidden">連携</span>
+                        </button>
+                        <button id="logoutBtn" onclick="disconnect()" title="ログアウト"
+                            class="hidden ml-2 w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -800,6 +806,13 @@
             connectModal.classList.add('hidden');
         }
 
+        function disconnect() {
+            if (confirm('ログアウトしますか？（保存された秘密鍵は削除されます）')) {
+                localStorage.removeItem('direct_private_key');
+                location.reload();
+            }
+        }
+
         function togglePkVisibility() {
             const pkInput = document.getElementById('direct-private-key');
             const eyeIcon = document.getElementById('pk-eye-icon');
@@ -836,6 +849,7 @@
             const pk = document.getElementById('direct-private-key').value.trim();
             if (pk.length !== 64) return showToast('秘密鍵は64文字で入力してください');
 
+            log('Authenticating with Private Key...', 'info');
             try {
                 const account = symbol.Account.createFromPrivateKey(pk, networkType);
                 activeAddress = account.address.plain();
@@ -847,6 +861,7 @@
                 const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
                 document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-bolt mr-2 text-amber-400"></i>${shortAddr}`;
                 document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                document.getElementById('logoutBtn').classList.remove('hidden');
 
                 document.getElementById('user-address-short').innerText = activeAddress;
                 document.getElementById('user-avatar').innerText = activeAddress[0];
@@ -854,11 +869,13 @@
                 document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
                 document.getElementById('connect-prompt').classList.add('hidden');
 
-                showToast('直接モードで連携しました');
+                log(`Authentication Success: ${activeAddress}`, 'success');
+                showToast('認証に成功しました');
                 closeConnectModal();
                 updateBalance();
                 renderProducts();
             } catch (e) {
+                log(`Authentication Failed: ${e.message}`, 'error');
                 showToast('秘密鍵が正しくありません');
             }
         }
@@ -1320,6 +1337,7 @@
                     const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
                     document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
                     document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                    document.getElementById('logoutBtn').classList.remove('hidden');
 
                     document.getElementById('user-address-short').innerText = activeAddress;
                     document.getElementById('user-avatar').innerText = activeAddress[0];
@@ -1478,12 +1496,14 @@
 
             const interval = setInterval(async () => {
                 retryCount++;
-                showSwapOverlay('Validating', `ネットワークの承認を待機中... (${retryCount}/${maxRetries})`, 80 + (retryCount));
 
                 try {
                     const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
                     const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
                     const data = await res.json();
+
+                    const group = data.group || 'unknown';
+                    showSwapOverlay('Validating', `ネットワークの承認を待機中... (${group}: ${retryCount}/${maxRetries})`, 80 + (retryCount));
 
                     if (data.group === 'confirmed') {
                         clearInterval(interval);

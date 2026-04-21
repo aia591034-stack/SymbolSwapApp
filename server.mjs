@@ -265,7 +265,7 @@ app.get('/api/config', (req, res) => {
         operatorPublicKey: operatorKeyPair.publicKey.toString(),
         currencyId: CURRENCY_ID,
         networkType: 'testnet',
-        generationHash: '49D6E1CE276A85B70E1FDAD5093008F24BC3D0B66FE300B4E6517BC2AF227E2C'
+        generationHash: '49D6E1CE276A85B70EAFE52349AACCA389302E7A9754BCF1221E79494FC665A4'
     });
 });
 
