@@ -24,6 +24,11 @@ const upload = multer({ dest: UPLOAD_DIR });
 app.use(express.static('public'));
 app.use(express.json());
 
+// ヘルスチェック用のテストエンドポイント
+app.get('/api/test', (req, res) => {
+    res.json({ status: 'ok', version: '1.0.3', node: process.version });
+});
+
 const DB_FILE = path.join(__dirname, 'data.json');
 
 // --- Pinata (IPFS) 設定 ---
