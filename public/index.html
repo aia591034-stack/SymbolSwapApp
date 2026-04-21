@@ -1373,122 +1373,86 @@
 
             log(`Initiating swap protocol: ${p.title}`);
             try {
-                const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
-                if (!secretRes.ok) throw new Error('Failed to retrieve asset data');
-                const { secret } = await secretRes.json();
-
-                const configRes = await fetch('/api/config');
-                const config = await configRes.json();
-
-                const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
-                const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
-                const epochAdjustment = 1667250467;
-                const generationHash = config.generationHash;
-
-                showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
-
-                const txs = [];
-
-                // 1. 代金の支払い (Buyer -> Seller)
-                txs.push(symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    sellerAccount.address,
-                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
-                    symbol.PlainMessage.create('Nexus Swap: ' + p.title),
-                    networkType
-                ).toAggregate(buyerAccount));
-
-                // 2. NFTの移転 (Seller -> Buyer) - NFT販売または両方の場合
-                if (p.saleType === 'nft' || p.saleType === 'both') {
-                    if (!p.mosaicId) throw new Error('Mosaic ID is missing for this NFT asset');
-
-                    // コサイン署名の必要性をチェック
-                    if (p.sellerAddress !== activeAddress) {
-                        log('Warning: This NFT swap requires Seller\'s cosignature. Aggregate Bonded path might be needed.', 'error');
-                        showToast('NFTの購入には出品者の承認（コサイン署名）が必要な設定です。');
-                        // 続行はするが、失敗する可能性が高いことを警告
-                    }
-
-                    txs.push(symbol.TransferTransaction.create(
-                        symbol.Deadline.create(epochAdjustment),
-                        buyerAccount.address,
-                        [new symbol.Mosaic(new symbol.MosaicId(p.mosaicId), symbol.UInt64.fromUint(1))],
-                        symbol.PlainMessage.create('NFT Transfer: ' + p.title),
-                        networkType
-                    ).toAggregate(sellerAccount));
-                }
-
-                // 3. メッセージ（秘密情報/購入証跡）の記録 (Buyer -> Buyer)
-                txs.push(symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    buyerAccount.address,
-                    [],
-                    symbol.PlainMessage.create(secret),
-                    networkType
-                ).toAggregate(buyerAccount));
-
-                // アグリゲートトランザクションの構築
-                const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment),
-                    txs,
-                    networkType,
-                    [],
-                    symbol.UInt64.fromUint(1000000)
-                );
-
-                // 【修正】Failure_Aggregate_V2_Prohibited 対策
-                // ネットワーク設定により V2 が禁止されている場合、明示的に V1 を指定します。
-                // また、内包されるトランザクションのバージョンも整合性を取ります。
-                aggregateTx.version = 1;
-                txs.forEach(tx => {
-                    tx.version = 1;
+                // 1. サーバーでトランザクションを構築 (V2/SDK v3対応)
+                showSwapOverlay('Constructing Tx', 'サーバーでトランザクションを構築中...', 30);
+                const buildRes = await fetch('/api/build_transaction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        productId: p.id,
+                        buyerPublicKey: activePublicKey,
+                        activeAddress: activeAddress
+                    })
                 });
-                log(`Transaction constructed (Version: ${aggregateTx.version})`);
 
-                // 直接モード（秘密鍵）の場合の処理
+                if (!buildRes.ok) throw new Error('Failed to build transaction on server');
+                const { payload, hash } = await buildRes.json();
+
+                // 2. 署名処理
+                let signedTxPayload = null;
+                let txHash = hash;
+
                 if (directPrivateKey) {
                     showSwapOverlay('Signing in Browser', 'ブラウザで署名を実行中...', 50);
                     log('Direct Signing starting...');
-                    const buyerPrivAccount = symbol.Account.createFromPrivateKey(directPrivateKey, networkType);
-                    const signedTx = buyerPrivAccount.sign(aggregateTx, generationHash);
 
-                    log(`Direct Signing Success. Hash: ${signedTx.hash}`);
-                    showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+                    const buyerAccount = symbol.Account.createFromPrivateKey(directPrivateKey, networkType);
 
-                    // サーバー経由でアナウンス（ログ記録のため）
-                    const res = await fetch('/api/purchase_sss', {
+                    // アグリゲートトランザクションへのコサイン署名を作成
+                    // SDK v2 での直接署名処理 (ハッシュに対して署名)
+                    const signature = buyerAccount.signData(hash);
+
+                    showSwapOverlay('Finalizing', '署名を結合中...', 70);
+                    const announceRes = await fetch('/api/announce_transaction', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ signedPayload: signedTx.payload })
+                        body: JSON.stringify({
+                            payload: payload,
+                            cosignatures: [{
+                                parentHash: hash,
+                                signature: signature,
+                                signerPublicKey: buyerAccount.publicKey
+                            }]
+                        })
                     });
-                    const data = await res.json();
 
-                    if (data.success) {
-                        log('Transaction broadcasted via Direct Mode', 'success');
-                        checkStatus(signedTx.hash, activeAddress, p);
+                    const announceData = await announceRes.json();
+                    if (announceData.success) {
+                        log('Transaction broadcasted via Direct Mode (V2)', 'success');
+                        checkStatus(hash, activeAddress, p);
                     } else {
-                        const errorDetail = data.details ? ` (${data.details})` : '';
-                        throw new Error(`${data.error}${errorDetail}`);
+                        throw new Error(announceData.error + (announceData.details ? `: ${announceData.details}` : ''));
                     }
                     return;
                 }
 
+                // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                window.SSS.setTransaction(aggregateTx);
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx?.payload) throw new Error('Protocol rejected by user');
+                // SSSでもサーバーで構築したV2トランザクションを使用
+                const transaction = symbol.TransactionMapping.createFromPayload(payload);
+                window.SSS.setTransaction(transaction);
+                const signedSSS = await window.SSS.requestSign();
+                if (!signedSSS?.payload) throw new Error('Protocol rejected by user');
 
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
-                const res = await fetch('/api/purchase_sss', {
+                // SSSの場合も、運営の署名を結合するために announce_transaction を使う
+                const res = await fetch('/api/announce_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ signedPayload: signedTx.payload })
+                    body: JSON.stringify({
+                        payload: payload,
+                        cosignatures: [{
+                            parentHash: hash,
+                            signature: signedSSS.signature,
+                            signerPublicKey: signedSSS.signerPublicKey
+                        }]
+                    })
                 });
                 const data = await res.json();
 
                 if (data.success) {
                     log('Transaction broadcasted', 'success');
-                    checkStatus(signedTx.hash, activeAddress, p);
+                    checkStatus(signedSSS.hash, activeAddress, p);
                 } else {
                     const errorDetail = data.details ? ` (${data.details})` : '';
                     throw new Error(`${data.error}${errorDetail}`);

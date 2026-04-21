@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
 
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
-import { PrivateKey } from 'symbol-sdk';
+import { PrivateKey, utils } from 'symbol-sdk';
 import * as symbol_pkg from 'symbol-sdk/symbol';
 const { SymbolFacade, KeyPair } = symbol_pkg;
 import multer from 'multer';
@@ -37,6 +37,11 @@ const port = process.env.PORT || 3000;
 // 絶対パスを使用して静的ファイルを配信
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
+// Symbol SDK v3 のブラウザ用バイナリを配信
+app.get('/lib/symbol-sdk-v3.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'node_modules/symbol-sdk/dist/bundle.web.js'));
+});
 
 // ヘルスチェック用のテストエンドポイント
 app.get('/api/test', (req, res) => {
@@ -133,6 +138,133 @@ app.post('/api/purchase_sss', async (req, res) => {
         }
     } catch (error) {
         console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// トランザクション構築エンドポイント（SDK v3を使用して正しい V2 アグリゲートを生成）
+app.post('/api/build_transaction', async (req, res) => {
+    try {
+        const { productId, buyerPublicKey, activeAddress } = req.body;
+        if (!productId || !buyerPublicKey) {
+            return res.status(400).json({ error: "商品IDまたは公開鍵が不足しています" });
+        }
+
+        const products = getProducts();
+        const p = products.find(item => item.id === productId);
+        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
+
+        const operatorKeyPair = new KeyPair(new PrivateKey(accounts.A.key));
+        const sellerPublicKey = p.sellerPublicKey;
+        const buyerPubKeyObj = new symbol_pkg.PublicKey(buyerPublicKey);
+        const sellerPubKeyObj = new symbol_pkg.PublicKey(sellerPublicKey);
+
+        const networkType = facade.network.identifier;
+        const deadline = BigInt(Date.now() - 1667250467000 + 7200000); // 2 hours later
+
+        const txs = [];
+
+        // 1. 代金の支払い (Buyer -> Seller)
+        txs.push(facade.transactionFactory.createEmbedded({
+            type: 'transfer_transaction_v1',
+            signerPublicKey: buyerPubKeyObj,
+            recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
+            mosaics: [{ mosaicId: BigInt('0x' + CURRENCY_ID), amount: BigInt(p.price * 1000000) }],
+            message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
+        }));
+
+        // 2. NFTの移転 (Seller -> Buyer)
+        if (p.saleType === 'nft' || p.saleType === 'both') {
+            if (p.mosaicId) {
+                txs.push(facade.transactionFactory.createEmbedded({
+                    type: 'transfer_transaction_v1',
+                    signerPublicKey: sellerPubKeyObj,
+                    recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
+                    mosaics: [{ mosaicId: BigInt('0x' + p.mosaicId), amount: 1n }],
+                    message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
+                }));
+            }
+        }
+
+        // 3. メッセージの記録 (Buyer -> Buyer)
+        txs.push(facade.transactionFactory.createEmbedded({
+            type: 'transfer_transaction_v1',
+            signerPublicKey: buyerPubKeyObj,
+            recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
+            mosaics: [],
+            message: new Uint8Array([0, ...Buffer.from(p.secret)])
+        }));
+
+        // アグリゲートトランザクションの構築 (V2)
+        const merkleRoot = facade.constructor.hashEmbeddedTransactions(txs);
+        const aggregateTx = facade.transactionFactory.create({
+            type: 'aggregate_complete_transaction_v2',
+            signerPublicKey: operatorKeyPair.publicKey,
+            deadline: deadline,
+            transactionsHash: merkleRoot,
+            transactions: txs,
+            fee: 1000000n // 1 XYM
+        });
+
+        // 運営(Operator)が主署名者として署名
+        const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
+        const payload = utils.uint8ToHex(facade.transactionFactory.constructor.attachSignature(aggregateTx, sig));
+
+        // ペイロードを返す
+        res.json({ 
+            success: true, 
+            payload: payload,
+            hash: facade.hashTransaction(aggregateTx).toString()
+        });
+
+    } catch (error) {
+        console.error("Build Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 署名を結合してアナウンスするエンドポイント
+app.post('/api/announce_transaction', async (req, res) => {
+    try {
+        const { payload, cosignatures } = req.body;
+        if (!payload) return res.status(400).json({ error: "ペイロードがありません" });
+
+        // ペイロードからトランザクションオブジェクトを復元
+        const aggregateTx = facade.transactionFactory.deserialize(utils.hexToUint8(payload));
+
+        // コサイン署名を追加
+        if (cosignatures && cosignatures.length > 0) {
+            cosignatures.forEach(cs => {
+                const cosignature = new symbol_pkg.Cosignature();
+                cosignature.signerPublicKey = new symbol_pkg.PublicKey(cs.signerPublicKey);
+                cosignature.signature = new symbol_pkg.Signature(cs.signature);
+                aggregateTx.cosignatures.push(cosignature);
+            });
+        }
+
+        // 最終的なペイロードを作成
+        const finalPayload = utils.uint8ToHex(aggregateTx.serialize());
+
+        // ノードにアナウンス
+        const response = await fetch(`${NODE_URL}/transactions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: finalPayload })
+        });
+
+        if (response.ok) {
+            res.json({ success: true, message: "トランザクションを送信しました" });
+        } else {
+            const errorData = await response.json();
+            console.error("Node Error:", errorData);
+            res.status(response.status).json({ 
+                success: false, 
+                error: errorData.code || "アナウンス失敗", 
+                details: errorData.message || JSON.stringify(errorData) 
+            });
+        }
+    } catch (error) {
+        console.error("Announce Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
