@@ -105,6 +105,9 @@ const accounts = {
 
 let CURRENCY_ID = '72C0212E67A08BCE'; 
 
+// Vercel等のDBがない環境用の一時的な保存先
+let memoryProducts = [];
+
 // SSS連携: クライアントから「部分署名済みのアグリゲートトランザクション」を受け取り、運営(A)がアナウンスするエンドポイント
 app.post('/api/purchase_sss', async (req, res) => {
     try {
@@ -132,6 +135,16 @@ app.post('/api/purchase_sss', async (req, res) => {
 
 function getProducts() {
     try {
+        if (process.env.VERCEL) {
+            // data.json の初期データとメモリ内のデータを合体させる
+            let initialProducts = [];
+            if (fs.existsSync(DB_FILE)) {
+                const data = JSON.parse(fs.readFileSync(DB_FILE));
+                initialProducts = data.products || [];
+            }
+            return [...initialProducts, ...memoryProducts];
+        }
+
         if (!fs.existsSync(DB_FILE)) {
             return [];
         }
@@ -161,7 +174,19 @@ app.get('/api/products', (req, res) => {
 // 秘密情報(secret)をクライアントに送る。
 // 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
 function saveProducts(products) {
-    if (process.env.VERCEL) return; // Vercelでは保存しない
+    if (process.env.VERCEL) {
+        // Vercelではファイルに書けないのでメモリに保存
+        // 既存の data.json にない新規追加分のみを抽出して保持
+        let initialIds = [];
+        try {
+            if (fs.existsSync(DB_FILE)) {
+                const data = JSON.parse(fs.readFileSync(DB_FILE));
+                initialIds = (data.products || []).map(p => p.id);
+            }
+        } catch (e) {}
+        memoryProducts = products.filter(p => !initialIds.includes(p.id));
+        return;
+    }
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify({ products }, null, 2));
     } catch (error) {
@@ -243,13 +268,17 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
     try {
         const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl, saleType, mosaicId } = req.body;
         const file = req.file;
-        if (!file) return res.status(400).json({ error: "ファイルがありません" });
+        if (!file) {
+            console.error("[400] Registration failed: No file uploaded");
+            return res.status(400).json({ error: "ファイルがありません。商品には必ずデジタルファイルの添付が必要です。" });
+        }
 
         // IPFS にアップロードを試みる
         const ipfsUrl = await uploadToPinata(file.path, file.originalname);
         
+        // Vercel環境での警告（Pinataがない場合）
         if (process.env.VERCEL && !ipfsUrl) {
-            return res.status(400).json({ error: "Vercel環境では Pinata APIキーの設定が必要です（永続的なファイル保存のため）" });
+            console.warn("Vercel環境ですが Pinata APIキーが設定されていないため、ファイルは一時保存のみとなります（数分で消えます）");
         }
 
         const protocol = req.protocol;

@@ -1690,18 +1690,20 @@
             formData.append('imageUrl', imageUrl || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=1200');
             formData.append('file', fileInput.files[0]);
 
-            log('Uploading digital payload...');
+            log('デジタル・ペイロードをアップロード中...');
             const res = await fetch('/api/products', { method: 'POST', body: formData });
             if (res.ok) {
-                showToast('Asset deployed to Nexus');
+                showToast('アセットをマーケットに出品しました');
                 loadProducts();
                 document.getElementById('pTitle').value = '';
                 document.getElementById('pImageUrl').value = '';
                 document.getElementById('pMosaicId').value = '';
                 document.getElementById('pFile').value = '';
-                document.getElementById('file-name-display').innerText = 'Drop digital file';
+                document.getElementById('file-name-display').innerText = 'ファイルをアップロード';
             } else {
-                log('Deployment failed', 'error');
+                const errData = await res.json();
+                log('出品に失敗しました: ' + (errData.error || '不明なエラー'), 'error');
+                showToast('エラー: ' + (errData.error || '出品に失敗しました'));
             }
         };
 
