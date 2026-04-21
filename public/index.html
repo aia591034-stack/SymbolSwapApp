@@ -1335,6 +1335,14 @@
                 // 2. NFTの移転 (Seller -> Buyer) - NFT販売または両方の場合
                 if (p.saleType === 'nft' || p.saleType === 'both') {
                     if (!p.mosaicId) throw new Error('Mosaic ID is missing for this NFT asset');
+
+                    // コサイン署名の必要性をチェック
+                    if (p.sellerAddress !== activeAddress) {
+                        log('Warning: This NFT swap requires Seller\'s cosignature. Aggregate Bonded path might be needed.', 'error');
+                        showToast('NFTの購入には出品者の承認（コサイン署名）が必要な設定です。');
+                        // 続行はするが、失敗する可能性が高いことを警告
+                    }
+
                     txs.push(symbol.TransferTransaction.create(
                         symbol.Deadline.create(epochAdjustment),
                         buyerAccount.address,
@@ -1364,15 +1372,29 @@
 
                 // 直接モード（秘密鍵）の場合の処理
                 if (directPrivateKey) {
-                    showSwapOverlay('Signing in Browser', 'ブラウザで署名とアナウンスを実行中...', 50);
+                    showSwapOverlay('Signing in Browser', 'ブラウザで署名を実行中...', 50);
+                    log('Direct Signing starting...');
                     const buyerPrivAccount = symbol.Account.createFromPrivateKey(directPrivateKey, networkType);
                     const signedTx = buyerPrivAccount.sign(aggregateTx, generationHash);
 
-                    log('Direct Signing Success. Announcing...');
-                    const repositoryFactory = new symbol.RepositoryFactoryHttp('https://sym-test-01.opening-line.jp:3001');
-                    await repositoryFactory.createTransactionRepository().announce(signedTx).toPromise();
+                    log(`Direct Signing Success. Hash: ${signedTx.hash}`);
+                    showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
 
-                    checkStatus(signedTx.hash, activeAddress, p);
+                    // サーバー経由でアナウンス（ログ記録のため）
+                    const res = await fetch('/api/purchase_sss', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ signedPayload: signedTx.payload })
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        log('Transaction broadcasted via Direct Mode', 'success');
+                        checkStatus(signedTx.hash, activeAddress, p);
+                    } else {
+                        const errorDetail = data.details ? ` (${data.details})` : '';
+                        throw new Error(`${data.error}${errorDetail}`);
+                    }
                     return;
                 }
 
@@ -1393,7 +1415,8 @@
                     log('Transaction broadcasted', 'success');
                     checkStatus(signedTx.hash, activeAddress, p);
                 } else {
-                    throw new Error(data.error);
+                    const errorDetail = data.details ? ` (${data.details})` : '';
+                    throw new Error(`${data.error}${errorDetail}`);
                 }
             } catch (e) {
                 log(e, 'error');

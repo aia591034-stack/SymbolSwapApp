@@ -123,9 +123,13 @@ app.post('/api/purchase_sss', async (req, res) => {
         if (response.ok) {
             res.json({ success: true, message: "トランザクションをネットワークに送信しました" });
         } else {
-            const errorData = await response.text();
+            const errorData = await response.json();
             console.error("Node Error:", errorData);
-            res.json({ success: false, error: "トランザクション送信失敗", details: errorData });
+            res.status(response.status).json({ 
+                success: false, 
+                error: errorData.code || "トランザクション送信失敗", 
+                details: errorData.message || JSON.stringify(errorData) 
+            });
         }
     } catch (error) {
         console.error(error);
