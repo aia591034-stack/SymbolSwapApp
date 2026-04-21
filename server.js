@@ -6,21 +6,21 @@ const { SymbolFacade, KeyPair, MessageEncoder } = require('symbol-sdk/symbol');
 const multer = require('multer');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-const upload = multer({ dest: 'uploads/' });
+// Vercelなどの読み取り専用環境に対応するため、一時ディレクトリを使用
+const UPLOAD_DIR = process.env.VERCEL ? '/tmp' : 'uploads/';
+const upload = multer({ dest: UPLOAD_DIR });
+
 app.use(express.static('public'));
-// セキュリティのため、/uploads ディレクトリを直接公開しないようにします
-// app.use('/uploads', express.static('uploads'));
 app.use(express.json());
 
 const DB_FILE = path.join(__dirname, 'data.json');
 
 // --- Pinata (IPFS) 設定 ---
-// https://app.pinata.cloud/ で作成した API Key を入力してください
-const PINATA_API_KEY = ''; // 'YOUR_API_KEY'
-const PINATA_SECRET_API_KEY = ''; // 'YOUR_SECRET_API_KEY'
-const PINATA_JWT = ''; // もし JWT を使う場合はこちら
+const PINATA_API_KEY = process.env.PINATA_API_KEY || ''; 
+const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY || ''; 
+const PINATA_JWT = process.env.PINATA_JWT || ''; 
 
 /**
  * Pinata にファイルをアップロードする関数
@@ -59,21 +59,20 @@ async function uploadToPinata(filePath, fileName) {
     }
 }
 
-if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
-}
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
+if (!process.env.VERCEL) {
+    if (!fs.existsSync(DB_FILE)) {
+        fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
+    }
+    if (!fs.existsSync('uploads')) {
+        fs.mkdirSync('uploads');
+    }
 }
 
 const facade = new SymbolFacade('testnet');
-// 安定して V3 を受け入れるノードを使用
 const NODE_URL = 'https://sym-test-01.opening-line.jp:3001'; 
 
-// 秘密鍵をサーバーで保持しない (SSS連携へ移行するため削除)
 const accounts = {
-    // 運営アカウントはトランザクションの手数料支払い（アグリゲートの起案）のみ行う
-    A: { name: "運営", key: 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
+    A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
 };
 
 let CURRENCY_ID = '72C0212E67A08BCE'; 
@@ -208,7 +207,14 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 
         // IPFS にアップロードを試みる
         const ipfsUrl = await uploadToPinata(file.path, file.originalname);
-        const secretUrl = ipfsUrl || `http://localhost:3000/uploads/${file.filename}`;
+        
+        if (process.env.VERCEL && !ipfsUrl) {
+            return res.status(400).json({ error: "Vercel環境では Pinata APIキーの設定が必要です（永続的なファイル保存のため）" });
+        }
+
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
 
         const data = JSON.parse(fs.readFileSync(DB_FILE));
         const newProduct = {
@@ -224,7 +230,9 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             secret: `URL: ${secretUrl}`
         };
         data.products.push(newProduct);
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        if (!process.env.VERCEL) {
+            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        }
         res.json({ success: true, product: newProduct });
     } catch (error) {
         console.error(error);
@@ -255,7 +263,9 @@ app.patch('/api/products/:id', (req, res) => {
         if (description) product.description = description;
         if (imageUrl) product.imageUrl = imageUrl;
 
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        if (!process.env.VERCEL) {
+            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        }
         res.json({ success: true, product });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -281,7 +291,9 @@ app.delete('/api/products/:id', (req, res) => {
         }
 
         data.products.splice(index, 1);
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        if (!process.env.VERCEL) {
+            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -295,6 +307,10 @@ app.use('/api', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}. もしこのURLが正しいはずなら、サーバーを再起動して最新のコードが反映されているか確認してください。` });
 });
 
-app.listen(port, () => {
-    console.log(`サーバーが正常に起動しました: http://localhost:${port}`);
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`サーバーが正常に起動しました: http://localhost:${port}`);
+    });
+}
+
+module.exports = app;
