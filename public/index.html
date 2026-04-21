@@ -267,9 +267,9 @@
 
             <div class="flex items-center space-x-2 md:space-x-6">
                 <div id="balance-display"
-                    class="hidden sm:flex items-center space-x-2 md:space-x-3 px-3 md:px-5 py-2 md:py-2.5 bg-white/5 rounded-xl md:rounded-2xl border border-white/5">
+                    class="hidden flex items-center space-x-2 md:space-x-3 px-3 md:px-5 py-2 md:py-2.5 bg-white/5 rounded-xl md:rounded-2xl border border-white/5">
                     <span
-                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden md:inline">Balance</span>
+                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden xs:inline">Balance</span>
                     <span id="xym-balance" class="text-xs md:text-sm font-bold">0.00</span>
                     <span class="text-[8px] md:text-[10px] font-black text-slate-500">XYM</span>
                 </div>
@@ -671,18 +671,23 @@
                 <p class="text-[10px] text-slate-500 font-medium mt-2">スマホ版 ALICE ウォレットと連携します</p>
             </div>
             <div class="space-y-6">
+                <div class="bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20">
+                    <p class="text-[9px] text-indigo-400 font-bold leading-relaxed uppercase">
+                        <i class="fas fa-info-circle mr-1"></i> ALICEの「設定 > プロフィール」または「受信」画面からコピーして貼り付けてください。
+                    </p>
+                </div>
                 <div class="space-y-3">
                     <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Your
                         Address</label>
-                    <input type="text" id="alice-address" placeholder="TB..."
-                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white">
+                    <input type="text" id="alice-address" placeholder="T..."
+                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
                 </div>
                 <div class="space-y-3">
                     <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Your Public
                         Key</label>
                     <input type="text" id="alice-publickey" placeholder="62B..."
-                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white">
-                    <p class="text-[8px] text-slate-500 italic">※ アグリゲートトランザクションの構築に必要です</p>
+                        class="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-xs text-white uppercase">
+                    <p class="text-[8px] text-slate-500 italic">※ 公開鍵はALICEのプロフィール画面で確認できます</p>
                 </div>
                 <button id="confirm-alice-link"
                     class="btn-primary w-full py-5 rounded-2xl text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-500/20">
@@ -743,12 +748,17 @@
         }
 
         document.getElementById('confirm-alice-link').onclick = () => {
-            const addr = document.getElementById('alice-address').value.trim();
-            const pubKey = document.getElementById('alice-publickey').value.trim();
-            if (!addr || !pubKey) return showToast('Address and Public Key are required');
+            const rawAddr = document.getElementById('alice-address').value.trim();
+            const rawPubKey = document.getElementById('alice-publickey').value.trim();
+            if (!rawAddr || !rawPubKey) return showToast('Address and Public Key are required');
 
-            activeAddress = addr;
-            activePublicKey = pubKey;
+            // ハイフンを除去し大文字に統一
+            activeAddress = rawAddr.replace(/-/g, '').toUpperCase();
+            activePublicKey = rawPubKey.toUpperCase();
+
+            // 次回訪問時のために保存
+            localStorage.setItem('alice_address', activeAddress);
+            localStorage.setItem('alice_publickey', activePublicKey);
 
             const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
             document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-mobile-alt mr-2 text-indigo-400"></i>${shortAddr}`;
@@ -767,6 +777,24 @@
             updateBalance();
             renderProducts();
         };
+
+        // 自動再接続（保存されている場合）
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedAddr = localStorage.getItem('alice_address');
+            const savedPubKey = localStorage.getItem('alice_publickey');
+            if (isMobile && savedAddr && savedPubKey) {
+                activeAddress = savedAddr;
+                activePublicKey = savedPubKey;
+                // UI更新
+                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-mobile-alt mr-2 text-indigo-400"></i>${shortAddr}`;
+                document.getElementById('user-address-short').innerText = activeAddress;
+                userDashboard.classList.remove('hidden');
+                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('connect-prompt').classList.add('hidden');
+                updateBalance();
+            }
+        });
 
         // Guide Modal Logic
         function openGuide(type) {
@@ -958,14 +986,22 @@
 
         async function updateBalance() {
             if (!activeAddress) return;
+            // アドレスからハイフンを除去して統一
+            const cleanAddress = activeAddress.replace(/-/g, '').toUpperCase();
             try {
-                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${activeAddress}`);
+                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${cleanAddress}`);
                 if (res.ok) {
                     const data = await res.json();
                     const xym = data.account.mosaics.find(m => m.id === '72C0212E67A08BCE');
                     const amount = xym ? (BigInt(xym.amount) / 1000000n) : 0n;
                     xymBalanceEl.innerText = Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
                     balanceDisplay.classList.remove('hidden');
+                    balanceDisplay.classList.add('flex'); // hiddenを消してflexを明示
+                } else {
+                    // アカウントが未アクティブ（残高0）の場合
+                    xymBalanceEl.innerText = '0.00';
+                    balanceDisplay.classList.remove('hidden');
+                    balanceDisplay.classList.add('flex');
                 }
             } catch (e) {
                 console.error('Balance update error:', e);
