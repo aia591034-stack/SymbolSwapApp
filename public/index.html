@@ -732,16 +732,31 @@
                     </p>
                 </div>
 
-                <div class="space-y-3">
-                    <a id="alice-auto-link" href="symbol://request-account" onclick="requestAliceAccount()"
-                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-3 transition-all">
-                        <i class="fas fa-mobile-alt text-lg"></i>
-                        <span>ALICE で自動連携</span>
-                    </a>
-                    <button onclick="copyLink('account')"
-                        class="w-full text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                        起動しない場合はリンクをコピー
-                    </button>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 gap-3">
+                        <a id="alice-auto-link" href="symbol://request-account"
+                            onclick="updateAliceLink(event, 'symbol')"
+                            class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-3 transition-all">
+                            <i class="fas fa-mobile-alt text-lg"></i>
+                            <span>ALICE で自動連携</span>
+                        </a>
+                        <button onclick="updateAliceLink(event, 'web+symbol')"
+                            class="w-full py-2 text-[8px] font-black text-slate-600 uppercase tracking-widest">
+                            起動しない場合は予備スキームを試す
+                        </button>
+                    </div>
+
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col items-center space-y-3">
+                        <p class="text-[8px] text-slate-500 font-black uppercase tracking-widest">最強の回避策 (ボタンが効かない場合)
+                        </p>
+                        <button onclick="copyLink('account')"
+                            class="w-full py-3 bg-white/10 rounded-xl text-indigo-400 font-black text-[9px] uppercase tracking-[0.2em] border border-indigo-500/20">
+                            <i class="fas fa-copy mr-2"></i> リンクをコピーしてURL欄に貼る
+                        </button>
+                        <p class="text-[7px] text-slate-600 leading-relaxed text-center italic">
+                            コピー後、ブラウザのアドレス欄に貼り付けて「開く」と確実に起動します。
+                        </p>
+                    </div>
                 </div>
 
                 <div class="relative py-4 flex items-center">
@@ -871,18 +886,21 @@
             }
         }
 
-        function requestAliceAccount() {
-            // 現在のURLを取得し、ALICEからの戻り先（callback）として設定
+        function updateAliceLink(event, scheme = 'symbol') {
             const callbackUrl = encodeURIComponent(window.location.href);
-            const uri = `symbol://request-account?callback=${callbackUrl}`;
+            const uri = `${scheme}://request-account?callback=${callbackUrl}`;
 
-            log(`Requesting Account from ALICE...`, 'info');
-
-            // UIを更新して直接リンクとしても機能させる
+            // aタグのhrefを更新
             const autoBtn = document.getElementById('alice-auto-link');
             autoBtn.href = uri;
 
-            window.location.href = uri;
+            // JavaScriptでの遷移も試みる（保険）
+            if (scheme !== 'symbol') {
+                event.preventDefault();
+                window.location.href = uri;
+            }
+
+            log(`Requesting ALICE via ${scheme}...`, 'info');
         }
 
         function copyLink(type) {
