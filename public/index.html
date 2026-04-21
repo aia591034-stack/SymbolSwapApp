@@ -726,36 +726,28 @@
                 <p class="text-[10px] text-slate-500 font-medium mt-2">スマホ版 ALICE ウォレットと連携します</p>
             </div>
             <div class="space-y-6">
-                <div class="bg-indigo-500/10 p-4 rounded-xl border border-indigo-500/20">
-                    <p class="text-[9px] text-indigo-400 font-bold leading-relaxed uppercase">
-                        <i class="fas fa-magic mr-1"></i> 推奨: ボタンを押すとALICEが開き、自動的に連携されます。
+                <div class="bg-indigo-500/10 p-5 rounded-2xl border border-indigo-500/20 space-y-3">
+                    <p class="text-[10px] text-indigo-400 font-black uppercase tracking-widest">
+                        <i class="fas fa-exclamation-circle mr-1"></i> 重要確認
+                    </p>
+                    <p class="text-[9px] text-slate-400 leading-relaxed">
+                        ALICEの「設定 > ネットワーク」が <span class="text-white font-bold underline">Testnet</span>
+                        であることを確認してください。メインネット設定では接続できません。
                     </p>
                 </div>
 
                 <div class="space-y-4">
-                    <div class="grid grid-cols-1 gap-3">
-                        <a id="alice-auto-link" href="symbol://request-account"
-                            onclick="updateAliceLink(event, 'symbol')"
-                            class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-3 transition-all">
-                            <i class="fas fa-mobile-alt text-lg"></i>
-                            <span>ALICE で自動連携</span>
-                        </a>
-                        <button onclick="updateAliceLink(event, 'web+symbol')"
-                            class="w-full py-2 text-[8px] font-black text-slate-600 uppercase tracking-widest">
-                            起動しない場合は予備スキームを試す
-                        </button>
-                    </div>
+                    <a id="alice-auto-link" href="symbol://request-account"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 transition-all border-2 border-white/10">
+                        <i class="fas fa-magic text-lg"></i>
+                        <span>ALICE で自動連携</span>
+                    </a>
 
-                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col items-center space-y-3">
-                        <p class="text-[8px] text-slate-500 font-black uppercase tracking-widest">最強の回避策 (ボタンが効かない場合)
-                        </p>
+                    <div class="flex flex-col items-center space-y-3">
                         <button onclick="copyLink('account')"
-                            class="w-full py-3 bg-white/10 rounded-xl text-indigo-400 font-black text-[9px] uppercase tracking-[0.2em] border border-indigo-500/20">
-                            <i class="fas fa-copy mr-2"></i> リンクをコピーしてURL欄に貼る
+                            class="text-[9px] font-black text-indigo-400/70 uppercase tracking-widest">
+                            <i class="fas fa-copy mr-1"></i> 起動しない場合はリンクをコピー
                         </button>
-                        <p class="text-[7px] text-slate-600 leading-relaxed text-center italic">
-                            コピー後、ブラウザのアドレス欄に貼り付けて「開く」と確実に起動します。
-                        </p>
                     </div>
                 </div>
 
@@ -953,6 +945,7 @@
         // 自動再接続（保存されている場合）
         window.addEventListener('DOMContentLoaded', () => {
             checkInAppBrowser();
+            initAliceLinks();
             // URLパラメータのチェック (ALICE callback対応)
             const urlParams = new URLSearchParams(window.location.search);
             const addrParam = urlParams.get('address');
@@ -1170,6 +1163,14 @@
                 msg.className = 'fixed top-0 left-0 w-full bg-orange-600 text-white text-[10px] font-black p-3 z-[1000] text-center uppercase tracking-widest';
                 msg.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> LINE/Twitter等では動きません。SafariやChromeで開き直してください。';
                 document.body.appendChild(msg);
+            }
+        }
+
+        function initAliceLinks() {
+            const callbackUrl = encodeURIComponent(window.location.href);
+            const autoBtn = document.getElementById('alice-auto-link');
+            if (autoBtn) {
+                autoBtn.href = `symbol://request-account?callback=${callbackUrl}`;
             }
         }
 
