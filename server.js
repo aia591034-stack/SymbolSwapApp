@@ -1,8 +1,12 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { PrivateKey, SymbolFacade, KeyPair } = require('symbol-sdk');
-const multer = require('multer');
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { PrivateKey, SymbolFacade, KeyPair } from 'symbol-sdk';
+import multer from 'multer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -309,10 +313,10 @@ app.use('/api', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.originalUrl}. もしこのURLが正しいはずなら、サーバーを再起動して最新のコードが反映されているか確認してください。` });
 });
 
-if (require.main === module) {
+if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
     app.listen(port, () => {
         console.log(`サーバーが正常に起動しました: http://localhost:${port}`);
     });
 }
 
-module.exports = app;
+export default app;
