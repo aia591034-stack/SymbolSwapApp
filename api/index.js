@@ -1,2 +1,2 @@
-import app from '../server.js';
+import app from '../server.mjs';
 export default app;
