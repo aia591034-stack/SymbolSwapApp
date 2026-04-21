@@ -146,13 +146,22 @@ app.post('/api/purchase_sss', async (req, res) => {
 app.post('/api/build_transaction', async (req, res) => {
     try {
         const { productId, buyerPublicKey, activeAddress } = req.body;
+        console.log(`[POST] build_transaction: productId=${productId}, buyerPublicKey=${buyerPublicKey}`);
+
         if (!productId || !buyerPublicKey) {
             return res.status(400).json({ error: "商品IDまたは公開鍵が不足しています" });
         }
 
         const products = getProducts();
-        const p = products.find(item => item.id === productId);
-        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
+        // IDの型（数値/文字列）に関わらず比較できるように修正
+        const p = products.find(item => item.id.toString() === productId.toString());
+        
+        if (!p) {
+            console.error(`[404] Product not found: ${productId}`);
+            return res.status(404).json({ error: "商品が見つかりません" });
+        }
+
+        console.log(`[INFO] Building transaction for: ${p.title}`);
 
         const operatorKeyPair = new KeyPair(new PrivateKey(accounts.A.key));
         const sellerPublicKey = p.sellerPublicKey;
