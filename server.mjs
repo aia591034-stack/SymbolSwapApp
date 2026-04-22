@@ -63,7 +63,7 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.0.5', 
+        version: '1.0.6', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',
@@ -148,6 +148,14 @@ const accounts = {
 
 let CURRENCY_ID = process.env.CURRENCY_ID || '72C0212E67A08BCE'; 
 
+// 16進数文字列を安全に BigInt に変換するヘルパー
+const toBigInt = (val) => {
+    if (typeof val === 'bigint') return val;
+    if (typeof val === 'number') return BigInt(Math.floor(val));
+    const cleanHex = String(val).startsWith('0x') ? val : '0x' + val;
+    return BigInt(cleanHex);
+};
+
 // Vercel等のDBがない環境用の一時的な保存先
 let memoryProducts = [];
 
@@ -209,7 +217,7 @@ app.post('/api/build_transaction', async (req, res) => {
         const networkType = facade.network.identifier;
         const epochAdjustment = 1667250467; // Testnet Epoch
         const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
-        const deadline = new models.Timestamp(symbolTime); // Timestampオブジェクトを使用
+        const deadline = symbolTime; // デスクリプタには生の BigInt を渡す
 
         const txs = [];
 
@@ -219,8 +227,8 @@ app.post('/api/build_transaction', async (req, res) => {
             signerPublicKey: buyerPubKeyObj,
             recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
             mosaics: [{ 
-                mosaicId: new models.MosaicId(BigInt('0x' + CURRENCY_ID)), 
-                amount: new models.Amount(BigInt(Math.floor(p.price * 1000000))) 
+                mosaicId: toBigInt(CURRENCY_ID), 
+                amount: toBigInt(p.price * 1000000)
             }],
             message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
         }));
@@ -233,8 +241,8 @@ app.post('/api/build_transaction', async (req, res) => {
                     signerPublicKey: sellerPubKeyObj,
                     recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
                     mosaics: [{ 
-                        mosaicId: new models.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), 
-                        amount: new models.Amount(1n) 
+                        mosaicId: toBigInt(p.mosaicId), 
+                        amount: 1n 
                     }],
                     message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
                 }));
@@ -258,7 +266,7 @@ app.post('/api/build_transaction', async (req, res) => {
             deadline: deadline,
             transactionsHash: merkleRoot,
             transactions: txs,
-            fee: new models.Amount(1000000n)
+            fee: 1000000n // 生の BigInt を渡す
         });
 
         // 運営(Operator)が主署名者として署名
