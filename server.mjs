@@ -63,7 +63,7 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.0.6', 
+        version: '1.0.7', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',
@@ -272,8 +272,10 @@ app.post('/api/build_transaction', async (req, res) => {
         // 運営(Operator)が主署名者として署名
         const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
         
-        // 【修正】SDK v3 の正しい署名付与方法
-        aggregateTx.signature = sig; 
+        // 【重要】SDK v3 では attachSignature を使用して内部状態（size等）を正しく更新する
+        facade.transactionFactory.constructor.attachSignature(aggregateTx, sig);
+        
+        console.log(`[DEBUG] Aggregate Tx Size: ${aggregateTx.size}`);
         const payload = utils.uint8ToHex(aggregateTx.serialize());
 
         // ペイロードを返す
