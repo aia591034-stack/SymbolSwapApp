@@ -390,7 +390,9 @@ app.get('/api/products/:id/secret', (req, res) => {
             return res.status(404).json({ error: "商品が見つかりません" });
         }
 
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
              return res.json({ secret: "購入後に公開されます" });
@@ -439,7 +441,8 @@ app.get('/api/products/:id/download', (req, res) => {
 // SSS用：トランザクション生成に必要な公開鍵情報などを提供
 app.get('/api/config', (req, res) => {
     try {
-        const operatorKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key)));
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
         res.json({
             operatorPublicKey: operatorKeyPair.publicKey.toString(),
             currencyId: CURRENCY_ID,
@@ -447,8 +450,8 @@ app.get('/api/config', (req, res) => {
             generationHash: '49D6E1CE276A85B70EAFE52349AACCA389302E7A9754BCF1221E79494FC665A4'
         });
     } catch (error) {
-        console.error("Config Error:", error);
-        res.status(500).json({ error: error.message });
+        console.error("Config Error Detail:", error);
+        res.status(500).json({ error: error.message, stack: error.stack });
     }
 });
 
@@ -508,7 +511,9 @@ app.patch('/api/products/:id', (req, res) => {
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
         const product = products[index];
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
         
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
             return res.status(403).json({ error: "編集権限がありません" });
@@ -538,7 +543,9 @@ app.delete('/api/products/:id', (req, res) => {
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
         const product = products[index];
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
             return res.status(403).json({ error: "削除権限がありません" });
