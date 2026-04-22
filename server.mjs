@@ -8,8 +8,10 @@ console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
 import * as symbol_pkg_main from 'symbol-sdk';
 import * as symbol_pkg_core from 'symbol-sdk/symbol';
-const { SymbolFacade, KeyPair, models, PrivateKey, PublicKey, Signature } = symbol_pkg_core;
-const { utils } = symbol_pkg_main;
+
+// SDK v3 の正しいクラス参照を定義
+const { SymbolFacade, KeyPair, models } = symbol_pkg_core;
+const { PrivateKey, PublicKey, Signature, utils } = symbol_pkg_main;
 import multer from 'multer';
 
 // multerの設定: アップロードされたファイルを保存
@@ -59,7 +61,15 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 
 // ヘルスチェック用のテストエンドポイント
 app.get('/api/test', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.4', node: process.version });
+    res.json({ 
+        status: 'ok', 
+        version: '1.0.5', 
+        node: process.version,
+        sdk: {
+            hasPrivateKey: typeof PrivateKey === 'function',
+            hasSymbolFacade: typeof SymbolFacade === 'function'
+        }
+    });
 });
 
 const DB_FILE = path.join(__dirname, 'data.json');
@@ -248,12 +258,14 @@ app.post('/api/build_transaction', async (req, res) => {
             deadline: deadline,
             transactionsHash: merkleRoot,
             transactions: txs,
-            fee: new models.Amount(1000000n) // Amountオブジェクトを使用
+            fee: new models.Amount(1000000n)
         });
 
         // 運営(Operator)が主署名者として署名
         const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
-        facade.transactionFactory.constructor.attachSignature(aggregateTx, sig);
+        
+        // 【修正】SDK v3 の正しい署名付与方法
+        aggregateTx.signature = sig; 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
 
         // ペイロードを返す
