@@ -6,9 +6,10 @@ import { fileURLToPath } from 'url';
 console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
 
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
-import { PrivateKey, PublicKey, Signature, utils } from 'symbol-sdk';
-import * as symbol_pkg from 'symbol-sdk/symbol';
-const { SymbolFacade, KeyPair, models } = symbol_pkg;
+import * as symbol_pkg_main from 'symbol-sdk';
+import * as symbol_pkg_core from 'symbol-sdk/symbol';
+const { SymbolFacade, KeyPair, models, PrivateKey, PublicKey, Signature } = symbol_pkg_core;
+const { utils } = symbol_pkg_main;
 import multer from 'multer';
 
 // multerの設定: アップロードされたファイルを保存
@@ -190,14 +191,15 @@ app.post('/api/build_transaction', async (req, res) => {
 
         console.log(`[INFO] Building transaction for: ${p.title}`);
 
-        const operatorKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key)));
-        const sellerPublicKey = p.sellerPublicKey;
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const buyerPubKeyObj = new PublicKey(utils.hexToUint8(buyerPublicKey));
-        const sellerPubKeyObj = new PublicKey(utils.hexToUint8(sellerPublicKey));
+        const sellerPubKeyObj = new PublicKey(utils.hexToUint8(p.sellerPublicKey));
 
         const networkType = facade.network.identifier;
         const epochAdjustment = 1667250467; // Testnet Epoch
-        const deadline = new models.Timestamp(BigInt(Date.now() - epochAdjustment * 1000 + 7200000)); // Timestampオブジェクトを使用
+        const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
+        const deadline = new models.Timestamp(symbolTime); // Timestampオブジェクトを使用
 
         const txs = [];
 
@@ -206,7 +208,10 @@ app.post('/api/build_transaction', async (req, res) => {
             type: 'transfer_transaction_v1',
             signerPublicKey: buyerPubKeyObj,
             recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
-            mosaics: [{ mosaicId: new models.MosaicId(BigInt('0x' + CURRENCY_ID)), amount: new models.Amount(BigInt(p.price * 1000000)) }],
+            mosaics: [{ 
+                mosaicId: new models.MosaicId(BigInt('0x' + CURRENCY_ID)), 
+                amount: new models.Amount(BigInt(Math.floor(p.price * 1000000))) 
+            }],
             message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
         }));
 
@@ -217,7 +222,10 @@ app.post('/api/build_transaction', async (req, res) => {
                     type: 'transfer_transaction_v1',
                     signerPublicKey: sellerPubKeyObj,
                     recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-                    mosaics: [{ mosaicId: new models.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), amount: new models.Amount(1n) }],
+                    mosaics: [{ 
+                        mosaicId: new models.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), 
+                        amount: new models.Amount(1n) 
+                    }],
                     message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
                 }));
             }
@@ -245,7 +253,8 @@ app.post('/api/build_transaction', async (req, res) => {
 
         // 運営(Operator)が主署名者として署名
         const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
-        const payload = utils.uint8ToHex(facade.transactionFactory.constructor.attachSignature(aggregateTx, sig));
+        facade.transactionFactory.constructor.attachSignature(aggregateTx, sig);
+        const payload = utils.uint8ToHex(aggregateTx.serialize());
 
         // ペイロードを返す
         res.json({ 
@@ -255,8 +264,8 @@ app.post('/api/build_transaction', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Build Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Build Error Detail:", error);
+        res.status(500).json({ success: false, error: error.message, stack: error.stack });
     }
 });
 
