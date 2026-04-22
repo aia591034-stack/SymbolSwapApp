@@ -102,13 +102,13 @@ if (!process.env.VERCEL) {
 }
 
 const facade = new SymbolFacade('testnet');
-const NODE_URL = 'https://sym-test-01.opening-line.jp:3001'; 
+const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
 
 const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
 };
 
-let CURRENCY_ID = '72C0212E67A08BCE'; 
+let CURRENCY_ID = process.env.CURRENCY_ID || '72C0212E67A08BCE'; 
 
 // Vercel等のDBがない環境用の一時的な保存先
 let memoryProducts = [];
