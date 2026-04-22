@@ -63,7 +63,7 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.1.1', 
+        version: '1.1.2', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',

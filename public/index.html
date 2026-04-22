@@ -1476,7 +1476,7 @@
 
                 if (data.success) {
                     log('Transaction broadcasted', 'success');
-                    checkStatus(signedSSS.hash, activeAddress, p);
+                    checkStatus(hash, activeAddress, p);
                 } else {
                     const errorDetail = data.details ? ` (${data.details})` : '';
                     throw new Error(`${data.error}${errorDetail}`);
