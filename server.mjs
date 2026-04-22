@@ -63,7 +63,7 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.0.7', 
+        version: '1.0.8', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',
@@ -297,8 +297,8 @@ app.post('/api/announce_transaction', async (req, res) => {
         const { payload, cosignatures } = req.body;
         if (!payload) return res.status(400).json({ error: "ペイロードがありません" });
 
-        // ペイロードからトランザクションオブジェクトを復元
-        const aggregateTx = facade.transactionFactory.deserialize(utils.hexToUint8(payload));
+        // 【修正】SDK v3 ではモデルクラスの deserialize メソッドを直接使用する
+        const aggregateTx = models.AggregateCompleteTransactionV2.deserialize(utils.hexToUint8(payload));
 
         // コサイン署名を追加
         if (cosignatures && cosignatures.length > 0) {
