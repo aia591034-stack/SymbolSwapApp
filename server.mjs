@@ -6,9 +6,9 @@ import { fileURLToPath } from 'url';
 console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
 
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
-import * as symbol_pkg from 'symbol-sdk';
-const { SymbolFacade, KeyPair } = symbol_pkg.symbol;
-const { utils } = symbol_pkg;
+import { utils } from 'symbol-sdk';
+import * as symbol_pkg from 'symbol-sdk/symbol';
+const { SymbolFacade, KeyPair } = symbol_pkg;
 import multer from 'multer';
 
 // multerの設定: アップロードされたファイルを保存
@@ -40,7 +40,12 @@ app.use(express.json());
 
 // Symbol SDK v3 のブラウザ用バイナリを配信
 app.get('/lib/symbol-sdk-v3.js', (req, res) => {
-    res.sendFile(path.join(__dirname, 'node_modules/symbol-sdk/dist/bundle.web.js'));
+    const bundlePath = path.join(__dirname, 'node_modules/symbol-sdk/dist/bundle.web.js');
+    if (fs.existsSync(bundlePath)) {
+        res.sendFile(bundlePath);
+    } else {
+        res.status(404).send('Symbol SDK Bundle not found');
+    }
 });
 
 // ヘルスチェック用のテストエンドポイント
@@ -165,12 +170,12 @@ app.post('/api/build_transaction', async (req, res) => {
 
         const operatorKeyPair = new KeyPair(new symbol_pkg.PrivateKey(utils.hexToUint8(accounts.A.key)));
         const sellerPublicKey = p.sellerPublicKey;
-        const buyerPubKeyObj = new symbol_pkg.symbol.PublicKey(utils.hexToUint8(buyerPublicKey));
-        const sellerPubKeyObj = new symbol_pkg.symbol.PublicKey(utils.hexToUint8(sellerPublicKey));
+        const buyerPubKeyObj = new symbol_pkg.PublicKey(utils.hexToUint8(buyerPublicKey));
+        const sellerPubKeyObj = new symbol_pkg.PublicKey(utils.hexToUint8(sellerPublicKey));
 
         const networkType = facade.network.identifier;
         const epochAdjustment = 1667250467; // Testnet Epoch
-        const deadline = new symbol_pkg.symbol.Timestamp(BigInt(Date.now() - epochAdjustment * 1000 + 7200000)); // Timestampオブジェクトを使用
+        const deadline = new symbol_pkg.Timestamp(BigInt(Date.now() - epochAdjustment * 1000 + 7200000)); // Timestampオブジェクトを使用
 
         const txs = [];
 
@@ -179,7 +184,7 @@ app.post('/api/build_transaction', async (req, res) => {
             type: 'transfer_transaction_v1',
             signerPublicKey: buyerPubKeyObj,
             recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
-            mosaics: [{ mosaicId: new symbol_pkg.symbol.MosaicId(BigInt('0x' + CURRENCY_ID)), amount: new symbol_pkg.symbol.Amount(BigInt(p.price * 1000000)) }],
+            mosaics: [{ mosaicId: new symbol_pkg.MosaicId(BigInt('0x' + CURRENCY_ID)), amount: new symbol_pkg.Amount(BigInt(p.price * 1000000)) }],
             message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
         }));
 
@@ -190,7 +195,7 @@ app.post('/api/build_transaction', async (req, res) => {
                     type: 'transfer_transaction_v1',
                     signerPublicKey: sellerPubKeyObj,
                     recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-                    mosaics: [{ mosaicId: new symbol_pkg.symbol.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), amount: new symbol_pkg.symbol.Amount(1n) }],
+                    mosaics: [{ mosaicId: new symbol_pkg.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), amount: new symbol_pkg.Amount(1n) }],
                     message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
                 }));
             }
@@ -213,7 +218,7 @@ app.post('/api/build_transaction', async (req, res) => {
             deadline: deadline,
             transactionsHash: merkleRoot,
             transactions: txs,
-            fee: new symbol_pkg.symbol.Amount(1000000n) // Amountオブジェクトを使用
+            fee: new symbol_pkg.Amount(1000000n) // Amountオブジェクトを使用
         });
 
         // 運営(Operator)が主署名者として署名
@@ -245,9 +250,9 @@ app.post('/api/announce_transaction', async (req, res) => {
         // コサイン署名を追加
         if (cosignatures && cosignatures.length > 0) {
             cosignatures.forEach(cs => {
-                const cosignature = new symbol_pkg.symbol.Cosignature();
-                cosignature.signerPublicKey = new symbol_pkg.symbol.PublicKey(utils.hexToUint8(cs.signerPublicKey));
-                cosignature.signature = new symbol_pkg.symbol.Signature(utils.hexToUint8(cs.signature));
+                const cosignature = new symbol_pkg.Cosignature();
+                cosignature.signerPublicKey = new symbol_pkg.PublicKey(utils.hexToUint8(cs.signerPublicKey));
+                cosignature.signature = new symbol_pkg.Signature(utils.hexToUint8(cs.signature));
                 aggregateTx.cosignatures.push(cosignature);
             });
         }
