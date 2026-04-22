@@ -63,7 +63,7 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.0.8', 
+        version: '1.0.9', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',
@@ -301,8 +301,13 @@ app.post('/api/announce_transaction', async (req, res) => {
         const aggregateTx = models.AggregateCompleteTransactionV2.deserialize(utils.hexToUint8(payload));
 
         // コサイン署名を追加
-        if (cosignatures && cosignatures.length > 0) {
-            cosignatures.forEach(cs => {
+        if (cosignatures && Array.isArray(cosignatures)) {
+            console.log(`[INFO] Adding ${cosignatures.length} cosignatures`);
+            cosignatures.forEach((cs, index) => {
+                if (!cs.signerPublicKey || !cs.signature) {
+                    console.warn(`[WARN] Invalid cosignature at index ${index}: missing publicKey or signature`);
+                    return;
+                }
                 const cosignature = new models.Cosignature();
                 cosignature.signerPublicKey = new PublicKey(utils.hexToUint8(cs.signerPublicKey));
                 cosignature.signature = new Signature(utils.hexToUint8(cs.signature));

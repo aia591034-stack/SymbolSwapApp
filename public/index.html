@@ -1428,23 +1428,21 @@
 
                 // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                // SSSでもサーバーで構築したV2トランザクションを使用
-                const transaction = symbol.TransactionMapping.createFromPayload(payload);
-                window.SSS.setTransaction(transaction);
-                const signedSSS = await window.SSS.requestSign();
-                if (!signedSSS?.payload) throw new Error('Protocol rejected by user');
+                
+                // 【重要】アグリゲートトランザクションへのコサイン署名を要求
+                const signedCosignature = await window.SSS.requestSignCosignature(hash);
+                if (!signedCosignature?.signature) throw new Error('Protocol rejected by user');
 
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
-                // SSSの場合も、運営の署名を結合するために announce_transaction を使う
                 const res = await fetch('/api/announce_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify({ 
                         payload: payload,
                         cosignatures: [{
                             parentHash: hash,
-                            signature: signedSSS.signature,
-                            signerPublicKey: signedSSS.signerPublicKey
+                            signature: signedCosignature.signature,
+                            signerPublicKey: signedCosignature.signerPublicKey
                         }]
                     })
                 });
