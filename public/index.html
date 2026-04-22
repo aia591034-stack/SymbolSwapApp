@@ -1429,15 +1429,35 @@
                 // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
                 
-                // 【修正】SSS 拡張機能の仕様に合わせたコサイン署名フロー
-                // 1. ペイロードからトランザクションオブジェクトを復元
+                // 【修正】SSSのバージョンや環境による挙動の違いを吸収する堅牢な署名フロー
+                let signedCosignature = null;
                 const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                // 2. コサイン署名用トランザクションを作成
-                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                // 3. SSS の activeAccount を使用して署名
-                const signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
+
+                try {
+                    log('Attempting SSS Cosignature...');
+                    if (window.SSS.activeAccount && typeof window.SSS.activeAccount.signCosignatureTransaction === 'function') {
+                        // SSS v2.x 以降の標準的なコサイン署名
+                        const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                        signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
+                    } else if (typeof window.SSS.requestSignCosignature === 'function') {
+                        // 一部の環境でのフォールバック
+                        signedCosignature = await window.SSS.requestSignCosignature(hash);
+                    } else {
+                        // 最終手段: 通常の署名リクエストからコサイン署名データを抽出
+                        log('Standard Cosignature not found, falling back to requestSign...', 'warn');
+                        window.SSS.setTransaction(aggregateTransaction);
+                        const result = await window.SSS.requestSign();
+                        signedCosignature = {
+                            signature: result.signature,
+                            signerPublicKey: result.signerPublicKey
+                        };
+                    }
+                } catch (signErr) {
+                    log(`SSS Signing Error: ${signErr.message}`, 'error');
+                    throw signErr;
+                }
                 
-                if (!signedCosignature?.signature) throw new Error('Protocol rejected by user');
+                if (!signedCosignature?.signature) throw new Error('Protocol rejected by user or invalid signature data');
 
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
                 const res = await fetch('/api/announce_transaction', {
