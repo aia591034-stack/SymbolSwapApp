@@ -6,19 +6,23 @@ import { fileURLToPath } from 'url';
 console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
 
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
-import { utils } from 'symbol-sdk';
+import { PrivateKey, PublicKey, Signature, utils } from 'symbol-sdk';
 import * as symbol_pkg from 'symbol-sdk/symbol';
-const { SymbolFacade, KeyPair } = symbol_pkg;
+const { SymbolFacade, KeyPair, models } = symbol_pkg;
 import multer from 'multer';
 
 // multerの設定: アップロードされたファイルを保存
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadDir = process.env.VERCEL ? '/tmp' : 'uploads/';
-        if (!process.env.VERCEL && !fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir);
+        try {
+            if (!process.env.VERCEL && !fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            cb(null, uploadDir);
+        } catch (e) {
+            cb(e);
         }
-        cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         // ファイル名をユニークにする（タイムスタンプ + 元の拡張子）
@@ -40,17 +44,21 @@ app.use(express.json());
 
 // Symbol SDK v3 のブラウザ用バイナリを配信
 app.get('/lib/symbol-sdk-v3.js', (req, res) => {
-    const bundlePath = path.join(__dirname, 'node_modules/symbol-sdk/dist/bundle.web.js');
-    if (fs.existsSync(bundlePath)) {
-        res.sendFile(bundlePath);
-    } else {
-        res.status(404).send('Symbol SDK Bundle not found');
+    try {
+        const bundlePath = path.join(__dirname, 'node_modules/symbol-sdk/dist/bundle.web.js');
+        if (fs.existsSync(bundlePath)) {
+            res.sendFile(bundlePath);
+        } else {
+            res.status(404).send('Symbol SDK Bundle not found');
+        }
+    } catch (e) {
+        res.status(500).send(e.message);
     }
 });
 
 // ヘルスチェック用のテストエンドポイント
 app.get('/api/test', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.3', node: process.version });
+    res.json({ status: 'ok', version: '1.0.4', node: process.version });
 });
 
 const DB_FILE = path.join(__dirname, 'data.json');
@@ -72,7 +80,8 @@ async function uploadToPinata(filePath, fileName) {
     try {
         const formData = new FormData();
         const fileContent = fs.readFileSync(filePath);
-        const blob = new Blob([fileContent]);
+        // Node.js 22 の Blob を使用
+        const blob = new Blob([fileContent], { type: 'application/octet-stream' });
         formData.append('file', blob, fileName);
 
         const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
@@ -88,7 +97,8 @@ async function uploadToPinata(filePath, fileName) {
             const result = await response.json();
             return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
         } else {
-            console.error("Pinata Upload Error:", await response.text());
+            const errorText = await response.text();
+            console.error("Pinata Upload Error:", errorText);
             return null;
         }
     } catch (error) {
@@ -97,16 +107,28 @@ async function uploadToPinata(filePath, fileName) {
     }
 }
 
+// データベースファイルの初期化（Vercel以外）
 if (!process.env.VERCEL) {
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
-    }
-    if (!fs.existsSync('uploads')) {
-        fs.mkdirSync('uploads');
+    try {
+        if (!fs.existsSync(DB_FILE)) {
+            fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
+        }
+        if (!fs.existsSync('uploads')) {
+            fs.mkdirSync('uploads', { recursive: true });
+        }
+    } catch (e) {
+        console.error("DB Initialization Error:", e);
     }
 }
 
-const facade = new SymbolFacade('testnet');
+// facade の初期化を try-catch で囲む
+let facade;
+try {
+    facade = new SymbolFacade('testnet');
+} catch (e) {
+    console.error("SymbolFacade initialization failed!", e);
+}
+
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
 
 const accounts = {
@@ -168,14 +190,14 @@ app.post('/api/build_transaction', async (req, res) => {
 
         console.log(`[INFO] Building transaction for: ${p.title}`);
 
-        const operatorKeyPair = new KeyPair(new symbol_pkg.PrivateKey(utils.hexToUint8(accounts.A.key)));
+        const operatorKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key)));
         const sellerPublicKey = p.sellerPublicKey;
-        const buyerPubKeyObj = new symbol_pkg.PublicKey(utils.hexToUint8(buyerPublicKey));
-        const sellerPubKeyObj = new symbol_pkg.PublicKey(utils.hexToUint8(sellerPublicKey));
+        const buyerPubKeyObj = new PublicKey(utils.hexToUint8(buyerPublicKey));
+        const sellerPubKeyObj = new PublicKey(utils.hexToUint8(sellerPublicKey));
 
         const networkType = facade.network.identifier;
         const epochAdjustment = 1667250467; // Testnet Epoch
-        const deadline = new symbol_pkg.Timestamp(BigInt(Date.now() - epochAdjustment * 1000 + 7200000)); // Timestampオブジェクトを使用
+        const deadline = new models.Timestamp(BigInt(Date.now() - epochAdjustment * 1000 + 7200000)); // Timestampオブジェクトを使用
 
         const txs = [];
 
@@ -184,7 +206,7 @@ app.post('/api/build_transaction', async (req, res) => {
             type: 'transfer_transaction_v1',
             signerPublicKey: buyerPubKeyObj,
             recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
-            mosaics: [{ mosaicId: new symbol_pkg.MosaicId(BigInt('0x' + CURRENCY_ID)), amount: new symbol_pkg.Amount(BigInt(p.price * 1000000)) }],
+            mosaics: [{ mosaicId: new models.MosaicId(BigInt('0x' + CURRENCY_ID)), amount: new models.Amount(BigInt(p.price * 1000000)) }],
             message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
         }));
 
@@ -195,7 +217,7 @@ app.post('/api/build_transaction', async (req, res) => {
                     type: 'transfer_transaction_v1',
                     signerPublicKey: sellerPubKeyObj,
                     recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-                    mosaics: [{ mosaicId: new symbol_pkg.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), amount: new symbol_pkg.Amount(1n) }],
+                    mosaics: [{ mosaicId: new models.MosaicId(BigInt('0x' + p.mosaicId.replace('0x',''))), amount: new models.Amount(1n) }],
                     message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
                 }));
             }
@@ -218,7 +240,7 @@ app.post('/api/build_transaction', async (req, res) => {
             deadline: deadline,
             transactionsHash: merkleRoot,
             transactions: txs,
-            fee: new symbol_pkg.Amount(1000000n) // Amountオブジェクトを使用
+            fee: new models.Amount(1000000n) // Amountオブジェクトを使用
         });
 
         // 運営(Operator)が主署名者として署名
@@ -250,9 +272,9 @@ app.post('/api/announce_transaction', async (req, res) => {
         // コサイン署名を追加
         if (cosignatures && cosignatures.length > 0) {
             cosignatures.forEach(cs => {
-                const cosignature = new symbol_pkg.Cosignature();
-                cosignature.signerPublicKey = new symbol_pkg.PublicKey(utils.hexToUint8(cs.signerPublicKey));
-                cosignature.signature = new symbol_pkg.Signature(utils.hexToUint8(cs.signature));
+                const cosignature = new models.Cosignature();
+                cosignature.signerPublicKey = new PublicKey(utils.hexToUint8(cs.signerPublicKey));
+                cosignature.signature = new Signature(utils.hexToUint8(cs.signature));
                 aggregateTx.cosignatures.push(cosignature);
             });
         }
@@ -359,7 +381,7 @@ app.get('/api/products/:id/secret', (req, res) => {
             return res.status(404).json({ error: "商品が見つかりません" });
         }
 
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
 
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
              return res.json({ secret: "購入後に公開されます" });
@@ -407,13 +429,18 @@ app.get('/api/products/:id/download', (req, res) => {
 
 // SSS用：トランザクション生成に必要な公開鍵情報などを提供
 app.get('/api/config', (req, res) => {
-    const operatorKeyPair = new KeyPair(new PrivateKey(accounts.A.key));
-    res.json({
-        operatorPublicKey: operatorKeyPair.publicKey.toString(),
-        currencyId: CURRENCY_ID,
-        networkType: 'testnet',
-        generationHash: '49D6E1CE276A85B70EAFE52349AACCA389302E7A9754BCF1221E79494FC665A4'
-    });
+    try {
+        const operatorKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key)));
+        res.json({
+            operatorPublicKey: operatorKeyPair.publicKey.toString(),
+            currencyId: CURRENCY_ID,
+            networkType: 'testnet',
+            generationHash: '49D6E1CE276A85B70EAFE52349AACCA389302E7A9754BCF1221E79494FC665A4'
+        });
+    } catch (error) {
+        console.error("Config Error:", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.post('/api/products', upload.single('file'), async (req, res) => {
@@ -472,7 +499,7 @@ app.patch('/api/products/:id', (req, res) => {
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
         const product = products[index];
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
         
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
             return res.status(403).json({ error: "編集権限がありません" });
@@ -502,7 +529,7 @@ app.delete('/api/products/:id', (req, res) => {
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
 
         const product = products[index];
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(accounts.A.key)).publicKey).toString();
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key))).publicKey).toString();
 
         if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
             return res.status(403).json({ error: "削除権限がありません" });
