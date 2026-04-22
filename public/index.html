@@ -1429,8 +1429,14 @@
                 // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
                 
-                // 【重要】アグリゲートトランザクションへのコサイン署名を要求
-                const signedCosignature = await window.SSS.requestSignCosignature(hash);
+                // 【修正】SSS 拡張機能の仕様に合わせたコサイン署名フロー
+                // 1. ペイロードからトランザクションオブジェクトを復元
+                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                // 2. コサイン署名用トランザクションを作成
+                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                // 3. SSS の activeAccount を使用して署名
+                const signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
+                
                 if (!signedCosignature?.signature) throw new Error('Protocol rejected by user');
 
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
