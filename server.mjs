@@ -267,10 +267,10 @@ app.post('/api/build_transaction', async (req, res) => {
             message: p.secret ? new Uint8Array([0, ...Buffer.from(p.secret)]) : new Uint8Array([0])
         }));
 
-        // アグリゲートトランザクションの構築 (V2)
+        // アグリゲートトランザクションの作成（互換性のためV1を使用）
         const merkleRoot = facade.constructor.hashEmbeddedTransactions(txs);
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2',
+            type: 'aggregate_complete_transaction_v1',
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             transactionsHash: merkleRoot,
