@@ -1429,60 +1429,50 @@
 
                 // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                
-                // 【修正】SSSのバージョンや環境による挙動の違いを吸収する堅牢な署名フロー
-                let signedCosignature = null;
-                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+
+                // 署名データの抽出（様々なデータ構造に対応）
+                let sig = null;
+                let pubKey = activePublicKey;
 
                 try {
                     log('Requesting SSS Cosignature...');
-                    // 優先順位1: 最も安定しているハッシュへの直接署名要求
+
                     if (typeof window.SSS.requestSignCosignature === 'function') {
                         log('Method: requestSignCosignature');
-                        signedCosignature = await window.SSS.requestSignCosignature(hash);
-                    } 
-                    // 優先順位2: activeAccount を使用した標準的な署名
+                        const result = await window.SSS.requestSignCosignature(hash);
+                        if (typeof result === 'string') {
+                            sig = result;
+                        } else if (result && result.signature) {
+                            sig = result.signature;
+                            pubKey = result.signerPublicKey || pubKey;
+                        }
+                    }
                     else if (window.SSS.activeAccount && typeof window.SSS.activeAccount.signCosignatureTransaction === 'function') {
                         log('Method: activeAccount.signCosignatureTransaction');
+                        const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
                         const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                        signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
-                    } 
-                    // 優先順位3: 通常の署名リクエストからの抽出（最終手段）
-                    else {
-                        log('Method: requestSign (Fallback)');
-                        window.SSS.setTransaction(aggregateTransaction);
-                        const result = await window.SSS.requestSign();
-                        signedCosignature = result;
+                        const result = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
+                        sig = result.signature;
+                        pubKey = result.signerPublicKey || pubKey;
                     }
-                    console.log('SSS Raw Result:', signedCosignature);
+                    else {
+                        log('SSS Cosignature method not found', 'error');
+                        throw new Error('SSSのコサイン署名機能が見つかりません。SSSを最新バージョンに更新するか、PCブラウザで試してください。');
+                    }
                 } catch (signErr) {
                     console.error('SSS Signing Detailed Error:', signErr);
                     log(`SSS Signing Error: ${signErr.message || signErr}`, 'error');
                     throw signErr;
                 }
-                
-                // 署名データの抽出（様々なデータ構造に対応）
-                let sig = null;
-                let pubKey = activePublicKey; // デフォルトは現在接続中の公開鍵
 
-                if (typeof signedCosignature === 'string' && signedCosignature.length === 128) {
-                    sig = signedCosignature; // 文字列で署名だけ返ってきた場合
-                } else if (signedCosignature) {
-                    sig = signedCosignature.signature || signedCosignature.Signature;
-                    pubKey = signedCosignature.signerPublicKey || signedCosignature.SignerPublicKey || signedCosignature.publicKey || activePublicKey;
-                    
-                    // 【重要】もし signature が無く payload がある場合、ペイロードから署名を抽出
-                    if (!sig && signedCosignature.payload && signedCosignature.payload.length >= 144) {
-                        log('Extracting signature from payload...');
-                        // Symbolの署名済みペイロード形式: size(8hex) + padding(8hex) + signature(128hex)
-                        sig = signedCosignature.payload.substring(16, 144);
-                    }
+                if (!sig || sig.length !== 128) {
+                    throw new Error(`有効な署名データが取得できませんでした。 (length: ${sig ? sig.length : 0})`);
                 }
 
-                if (!sig) {
-                    const keys = signedCosignature ? Object.keys(signedCosignature).join(', ') : 'null';
-                    console.error('Signature missing. Object keys:', keys);
-                    throw new Error(`SSSから署名データが返されませんでした。(返却データ形式: ${keys}) SSSの設定で「コサイン署名」が許可されているか確認してください。`);
+                // 公開鍵を確実に 16進数文字列にする
+                if (typeof pubKey !== 'string') {
+                    if (pubKey.hex) pubKey = pubKey.hex();
+                    else if (pubKey.toString) pubKey = pubKey.toString();
                 }
 
                 log('Cosignature obtained successfully');
@@ -1490,7 +1480,7 @@
                 const res = await fetch('/api/announce_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         payload: payload,
                         cosignatures: [{
                             parentHash: hash,
