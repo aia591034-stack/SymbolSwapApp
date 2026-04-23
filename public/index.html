@@ -1477,7 +1477,7 @@
                         const promise = (param !== undefined && param !== null) ? context[method](param) : context[method]();
                         return await Promise.race([
                             promise,
-                            new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 15000))
+                            new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 20000))
                         ]);
                     } catch (e) {
                         log(`Direct error from ${method}: ${e.message}`, 'error');

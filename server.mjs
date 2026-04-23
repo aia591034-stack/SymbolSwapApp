@@ -267,23 +267,26 @@ app.post('/api/build_transaction', async (req, res) => {
             message: p.secret ? new Uint8Array([0, ...Buffer.from(p.secret)]) : new Uint8Array([0])
         }));
 
-        // アグリゲートトランザクションの作成（互換性のためV1を使用）
+        // アグリゲートトランザクションの作成（V2に戻す - V1/V2どちらでも検証結果は同じだったため）
         const merkleRoot = facade.constructor.hashEmbeddedTransactions(txs);
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v1',
+            type: 'aggregate_complete_transaction_v2',
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             transactionsHash: merkleRoot,
             transactions: txs,
-            fee: 1000000n // 生の BigInt を渡す
+            fee: 1000000n
         });
 
-        // 運営(Operator)が主署名者として署名
-        const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
-        
-        // 【重要】SDK v3 では attachSignature を使用して内部状態（size等）を正しく更新する
-        facade.transactionFactory.constructor.attachSignature(aggregateTx, sig);
-        
+        // 【重要】主署名を確実に行うため、シリアライズデータに対して直接署名する
+        const generationHash = utils.hexToUint8('49D6E1CE276A85B70E1FD4D3555278B993706423073D9C752351D299A25C8476'); // Testnet
+        const dataToSign = new Uint8Array([
+            ...generationHash,
+            ...aggregateTx.serialize().slice(100) // SignerPublicKey 以降を署名対象とする
+        ]);
+        const signature = operatorKeyPair.sign(dataToSign);
+        aggregateTx.signature = new models.Signature(signature.bytes);
+
         console.log(`[DEBUG] Aggregate Tx Size: ${aggregateTx.size}`);
         const payload = utils.uint8ToHex(aggregateTx.serialize());
 
@@ -318,6 +321,7 @@ app.post('/api/announce_transaction', async (req, res) => {
                     return;
                 }
                 const cosignature = new models.Cosignature();
+                cosignature.version = 0n; // 明示的にセット
                 cosignature.signerPublicKey = new models.PublicKey(utils.hexToUint8(cs.signerPublicKey));
                 cosignature.signature = new models.Signature(utils.hexToUint8(cs.signature));
                 aggregateTx.cosignatures.push(cosignature);
