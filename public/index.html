@@ -1435,42 +1435,50 @@
                 const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
 
                 try {
-                    log('Attempting SSS Cosignature...');
-                    if (window.SSS.activeAccount && typeof window.SSS.activeAccount.signCosignatureTransaction === 'function') {
-                        // SSS v2.x 以降の標準的なコサイン署名
+                    log('Requesting SSS Cosignature...');
+                    // 優先順位1: 最も安定しているハッシュへの直接署名要求
+                    if (typeof window.SSS.requestSignCosignature === 'function') {
+                        log('Method: requestSignCosignature');
+                        signedCosignature = await window.SSS.requestSignCosignature(hash);
+                    } 
+                    // 優先順位2: activeAccount を使用した標準的な署名
+                    else if (window.SSS.activeAccount && typeof window.SSS.activeAccount.signCosignatureTransaction === 'function') {
+                        log('Method: activeAccount.signCosignatureTransaction');
                         const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
                         signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
-                        console.log('SSS Result (Standard):', signedCosignature);
-                    } else if (typeof window.SSS.requestSignCosignature === 'function') {
-                        // 一部の環境でのフォールバック
-                        signedCosignature = await window.SSS.requestSignCosignature(hash);
-                        console.log('SSS Result (Fallback 1):', signedCosignature);
-                    } else {
-                        // 最終手段: 通常の署名リクエストからコサイン署名データを抽出
-                        log('Standard Cosignature not found, falling back to requestSign...', 'warn');
+                    } 
+                    // 優先順位3: 通常の署名リクエストからの抽出（最終手段）
+                    else {
+                        log('Method: requestSign (Fallback)');
                         window.SSS.setTransaction(aggregateTransaction);
                         const result = await window.SSS.requestSign();
-                        console.log('SSS Result (Fallback 2):', result);
-                        signedCosignature = {
-                            signature: result.signature,
-                            signerPublicKey: result.signerPublicKey
-                        };
+                        signedCosignature = result;
                     }
+                    console.log('SSS Raw Result:', signedCosignature);
                 } catch (signErr) {
                     console.error('SSS Signing Detailed Error:', signErr);
                     log(`SSS Signing Error: ${signErr.message || signErr}`, 'error');
                     throw signErr;
                 }
                 
-                // 署名データの存在確認と、プロパティ名の揺れ（大文字小文字など）への対応
-                const sig = signedCosignature?.signature || signedCosignature?.Signature;
-                const pubKey = signedCosignature?.signerPublicKey || signedCosignature?.SignerPublicKey || signedCosignature?.publicKey;
+                // 署名データの抽出（様々なデータ構造に対応）
+                let sig = null;
+                let pubKey = activePublicKey; // デフォルトは現在接続中の公開鍵
 
-                if (!sig) {
-                    console.error('Missing signature in object:', signedCosignature);
-                    throw new Error('SSSから署名データが返されませんでした。パスワード入力後にキャンセルしたか、SSSの設定を確認してください。');
+                if (typeof signedCosignature === 'string' && signedCosignature.length === 128) {
+                    sig = signedCosignature; // 文字列で署名だけ返ってきた場合
+                } else if (signedCosignature) {
+                    sig = signedCosignature.signature || signedCosignature.Signature;
+                    pubKey = signedCosignature.signerPublicKey || signedCosignature.SignerPublicKey || signedCosignature.publicKey || activePublicKey;
                 }
 
+                if (!sig) {
+                    const keys = signedCosignature ? Object.keys(signedCosignature).join(', ') : 'null';
+                    console.error('Signature missing. Object keys:', keys);
+                    throw new Error(`SSSから署名データが返されませんでした。(返却データ形式: ${keys}) パスワード入力後にキャンセルしたか、SSSの設定を確認してください。`);
+                }
+
+                log('Cosignature obtained successfully');
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
                 const res = await fetch('/api/announce_transaction', {
                     method: 'POST',
