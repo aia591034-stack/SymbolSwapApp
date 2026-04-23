@@ -1475,7 +1475,7 @@
                     log(`Calling ${method}...`);
                     return await Promise.race([
                         context[method](param),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 10000))
+                        new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 5000))
                     ]);
                 };
 
