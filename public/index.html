@@ -763,7 +763,8 @@
     </div>
 
     <script src="https://xembook.github.io/nem2-browserify/symbol-sdk-2.0.4.js"></script>
-    <script src="/lib/symbol-sdk-v3.js"></script>
+    <!-- SDK v3はESM形式のため、通常のscriptタグではimport.metaエラーが出るため一時停止 -->
+    <!-- <script src="/lib/symbol-sdk-v3.js"></script> -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // AOS Initialize
@@ -1324,15 +1325,25 @@
 
         document.getElementById('sss-connect-btn').onclick = async () => {
             log('Scanning for SSS Identity...');
+            console.log('--- SSS Connection Debug ---');
+            console.log('window.SSS exists:', !!window.SSS);
+
             let retry = 0;
             const check = setInterval(() => {
+                console.log(`Connection attempt ${retry + 1}... window.SSS:`, !!window.SSS);
+
                 if (window.SSS) {
                     clearInterval(check);
+                    console.log('SSS Object found:', window.SSS);
+                    console.log('SSS ActiveAddress:', window.SSS.activeAddress);
+
                     activeAddress = window.SSS.activeAddress;
                     activePublicKey = window.SSS.activePublicKey;
 
                     if (!activeAddress) {
-                        log('Please unlock SSS extension', 'error');
+                        log('SSS is locked or no account linked', 'error');
+                        console.warn('SSS found but activeAddress is null. Is it locked?');
+                        showToast('SSSがロックされているか、アカウントが設定されていません。');
                         return;
                     }
 
@@ -1488,17 +1499,8 @@
                         // フォールバック: 通常の署名リクエストを試みる
                         log('Method: requestSign (Fallback for old SSS)');
                         try {
-                            // SDK v3 が利用可能かチェック
-                            let aggregateTransaction;
-                            if (window.symbol_sdk) {
-                                log('Using SDK v3 for client-side parsing');
-                                const { models } = window.symbol_sdk.symbol;
-                                const { utils } = window.symbol_sdk;
-                                // v3 のモデルから v2 (SSSが期待する形式) への変換は困難なため
-                                // SSSがペイロードを直接受け取れるか、または SDK v2 でパースを試みる
-                            }
-
-                            aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                            // SDK v2 でパースを試みる
+                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
                             window.SSS.setTransaction(aggregateTransaction);
                             const result = await window.SSS.requestSign();
 
