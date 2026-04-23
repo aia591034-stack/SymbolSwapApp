@@ -278,16 +278,11 @@ app.post('/api/build_transaction', async (req, res) => {
             fee: 1000000n
         });
 
-        // 【重要】主署名を確実に行うため、シリアライズデータに対して直接署名する
-        const generationHash = utils.hexToUint8('49D6E1CE276A85B70E1FD4D3555278B993706423073D9C752351D299A25C8476'); // Testnet
-        const dataToSign = new Uint8Array([
-            ...generationHash,
-            ...aggregateTx.serialize().slice(100) // SignerPublicKey 以降を署名対象とする
-        ]);
-        const signature = operatorKeyPair.sign(dataToSign);
-        aggregateTx.signature = new models.Signature(signature.bytes);
+        // 運営(Operator)が主署名者として署名
+        // 【重要】SDK v3 では signTransaction がアグリゲートの特殊な署名範囲（先頭52バイト）を自動的に扱います
+        const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
+        aggregateTx.signature = new models.Signature(sig.bytes);
 
-        console.log(`[DEBUG] Aggregate Tx Size: ${aggregateTx.size}`);
         const payload = utils.uint8ToHex(aggregateTx.serialize());
 
         // ペイロードを返す
@@ -307,42 +302,32 @@ app.post('/api/build_transaction', async (req, res) => {
 app.post('/api/announce_transaction', async (req, res) => {
     try {
         const { payload, cosignatures } = req.body;
-        if (!payload) return res.status(400).json({ error: "ペイロードがありません" });
 
-        // 【修正】SDK v3 ではモデルクラスの deserialize メソッドを直接使用する
+        if (!payload) {
+            return res.status(400).json({ success: false, error: "ペイロードがありません" });
+        }
+
+        // 【究極の修正】取引を再構築せず、クライアントから送られたペイロードを直接デシリアライズする。
+        // これにより、署名時のデータ（DeadlineやMerkleRoot等）が100%保持されます。
         const aggregateTx = models.AggregateCompleteTransactionV2.deserialize(utils.hexToUint8(payload));
 
-        // コサイン署名を追加
+        // クライアントからのコサイン署名を追加
         if (cosignatures && Array.isArray(cosignatures)) {
-            console.log(`[INFO] Adding ${cosignatures.length} cosignatures`);
-            cosignatures.forEach((cs, index) => {
-                if (!cs.signerPublicKey || !cs.signature) {
-                    console.warn(`[WARN] Invalid cosignature at index ${index}: missing publicKey or signature`);
-                    return;
-                }
+            cosignatures.forEach(cs => {
+                if (!cs.signerPublicKey || !cs.signature) return;
                 const cosignature = new models.Cosignature();
-                cosignature.version = 0n; // 明示的にセット
+                cosignature.version = 0n;
                 cosignature.signerPublicKey = new models.PublicKey(utils.hexToUint8(cs.signerPublicKey));
                 cosignature.signature = new models.Signature(utils.hexToUint8(cs.signature));
                 aggregateTx.cosignatures.push(cosignature);
             });
         }
 
-        // 最終的なペイロードを作成
-        // 【重要】SDK v3 では AggregateTransaction の serialize がコサイン署名を含めて size を更新してしまう。
-        // Symbol ノードはトランザクションヘッダーの size にコサイン署名を含めた値を期待するが、
-        // メイン署名はコサイン署名を含まない状態のデータ（size含む）に対して行われる場合がある。
-        // ここでは、SDK v3 の serialize() が生成する「コサイン署名込みのバイナリ」をベースにしつつ、
-        // メイン署名が作成された時の「正しいバイナリ構造」を維持する。
-        
-        // 1. 全ての署名が入った状態のバイナリを取得
-        const combinedPayload = aggregateTx.serialize();
+        // 最終的なペイロードとハッシュを作成
+        const finalPayload = utils.uint8ToHex(aggregateTx.serialize());
         const finalHash = facade.hashTransaction(aggregateTx).toString();
-        
-        console.log(`[DEBUG] Final Payload Length: ${combinedPayload.length}`);
-        console.log(`[DEBUG] Final Hash: ${finalHash}`);
 
-        const finalPayload = utils.uint8ToHex(combinedPayload);
+        console.log(`[INFO] Announcing transaction. Hash: ${finalHash}`);
 
         // ノードにアナウンス
         const response = await fetch(`${NODE_URL}/transactions`, {
