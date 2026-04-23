@@ -1496,10 +1496,25 @@
                             sig = result.signature;
                             pubKey = result.signerPublicKey || pubKey;
                         }
-                    }
+                    } 
                     else if (foundCosignMethod) {
                         log(`Method: ${foundCosignMethod} (Dynamic)`);
-                        const result = await window.SSS[foundCosignMethod](hash);
+                        let result;
+                        // requestSignCosignatureTransaction は Transaction オブジェクトを期待する場合が多い
+                        if (foundCosignMethod.includes('Transaction')) {
+                            log('Providing Transaction object to SSS...');
+                            try {
+                                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                                result = await window.SSS[foundCosignMethod](cosignatureTransaction);
+                            } catch (e) {
+                                log(`Failed to create Transaction object: ${e.message}. Falling back to hash.`, 'error');
+                                result = await window.SSS[foundCosignMethod](hash);
+                            }
+                        } else {
+                            result = await window.SSS[foundCosignMethod](hash);
+                        }
+                        
                         if (typeof result === 'string') sig = result;
                         else if (result && result.signature) {
                             sig = result.signature;
@@ -1508,7 +1523,15 @@
                     }
                     else if (window.SSS.activeAccount && foundAccountCosignMethod) {
                         log(`Method: activeAccount.${foundAccountCosignMethod} (Dynamic)`);
-                        const result = await window.SSS.activeAccount[foundAccountCosignMethod](hash);
+                        let result;
+                        if (foundAccountCosignMethod.includes('Transaction')) {
+                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                            const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                            result = await window.SSS.activeAccount[foundAccountCosignMethod](cosignatureTransaction);
+                        } else {
+                            result = await window.SSS.activeAccount[foundAccountCosignMethod](hash);
+                        }
+                        
                         if (typeof result === 'string') sig = result;
                         else if (result && result.signature) {
                             sig = result.signature;
