@@ -1471,6 +1471,14 @@
                 let sig = null;
                 let pubKey = activePublicKey;
 
+                const callSSS = async (method, param, context = window.SSS) => {
+                    log(`Calling ${method}...`);
+                    return await Promise.race([
+                        context[method](param),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 10000))
+                    ]);
+                };
+
                 try {
                     log('Checking SSS Methods...');
                     if (!window.SSS) {
@@ -1483,81 +1491,59 @@
                     log(`Detected SSS Methods: ${sssMethods.join(', ')}`);
                     log(`Detected SSS Account Methods: ${sssAccountMethods.join(', ')}`);
 
-                    // 動的なメソッド検索
-                    const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
-                    const foundAccountCosignMethod = sssAccountMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
-
+                    // 戦略1: 標準の requestSignCosignature
                     if (typeof window.SSS.requestSignCosignature === 'function') {
-                        log('Method: requestSignCosignature');
-                        const result = await window.SSS.requestSignCosignature(hash);
-                        if (typeof result === 'string') {
-                            sig = result;
-                        } else if (result && result.signature) {
-                            sig = result.signature;
-                            pubKey = result.signerPublicKey || pubKey;
-                        }
-                    } 
-                    else if (foundCosignMethod) {
-                        log(`Method: ${foundCosignMethod} (Dynamic)`);
-                        let result;
-                        // requestSignCosignatureTransaction は Transaction オブジェクトを期待する場合が多い
-                        if (foundCosignMethod.includes('Transaction')) {
-                            log('Providing Transaction object to SSS...');
-                            try {
-                                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                                result = await window.SSS[foundCosignMethod](cosignatureTransaction);
-                            } catch (e) {
-                                log(`Failed to create Transaction object: ${e.message}. Falling back to hash.`, 'error');
-                                result = await window.SSS[foundCosignMethod](hash);
-                            }
-                        } else {
-                            result = await window.SSS[foundCosignMethod](hash);
-                        }
-                        
-                        if (typeof result === 'string') sig = result;
-                        else if (result && result.signature) {
-                            sig = result.signature;
-                            pubKey = result.signerPublicKey || pubKey;
-                        }
-                    }
-                    else if (window.SSS.activeAccount && foundAccountCosignMethod) {
-                        log(`Method: activeAccount.${foundAccountCosignMethod} (Dynamic)`);
-                        let result;
-                        if (foundAccountCosignMethod.includes('Transaction')) {
-                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                            const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                            result = await window.SSS.activeAccount[foundAccountCosignMethod](cosignatureTransaction);
-                        } else {
-                            result = await window.SSS.activeAccount[foundAccountCosignMethod](hash);
-                        }
-                        
-                        if (typeof result === 'string') sig = result;
-                        else if (result && result.signature) {
-                            sig = result.signature;
-                            pubKey = result.signerPublicKey || pubKey;
-                        }
-                    }
-                    else if (window.SSS.activeAccount && typeof window.SSS.activeAccount.signCosignatureTransaction === 'function') {
-                        log('Method: activeAccount.signCosignatureTransaction');
-                        const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                        const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                        const result = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
-                        sig = result.signature;
-                        pubKey = result.signerPublicKey || pubKey;
-                    }
-                    else if (typeof window.SSS.requestSign === 'function') {
-                        // フォールバック: 通常の署名リクエストを試みる
-                        log('Method: requestSign (Fallback for old SSS)');
                         try {
-                            // SDK v2 でパースを試みる
-                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                            window.SSS.setTransaction(aggregateTransaction);
-                            const result = await window.SSS.requestSign();
+                            const result = await callSSS('requestSignCosignature', hash);
+                            if (typeof result === 'string') sig = result;
+                            else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            }
+                        } catch (e) { log(`requestSignCosignature failed: ${e.message}`, 'warn'); }
+                    }
 
-                            // 署名済みペイロードまたは署名オブジェクトが返る
+                    // 戦略2: 動的に見つかったメソッド (requestSignCosignatureTransaction など)
+                    if (!sig) {
+                        const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
+                        if (foundCosignMethod) {
+                            log(`Trying Dynamic Method: ${foundCosignMethod}`);
+                            // パターンA: ハッシュを渡す (多くの環境でこれが正解)
+                            try {
+                                log(`Attempt A: ${foundCosignMethod}(hash)`);
+                                const result = await callSSS(foundCosignMethod, hash);
+                                if (typeof result === 'string') sig = result;
+                                else if (result && result.signature) {
+                                    sig = result.signature;
+                                    pubKey = result.signerPublicKey || pubKey;
+                                }
+                            } catch (e) {
+                                log(`Attempt A failed: ${e.message}`, 'warn');
+                                // パターンB: Transactionオブジェクトを渡す
+                                if (!sig && foundCosignMethod.includes('Transaction')) {
+                                    try {
+                                        log(`Attempt B: ${foundCosignMethod}(TransactionObject)`);
+                                        const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                                        const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                                        const result = await callSSS(foundCosignMethod, cosignatureTransaction);
+                                        if (typeof result === 'string') sig = result;
+                                        else if (result && result.signature) {
+                                            sig = result.signature;
+                                            pubKey = result.signerPublicKey || pubKey;
+                                        }
+                                    } catch (e2) { log(`Attempt B failed: ${e2.message}`, 'warn'); }
+                                }
+                            }
+                        }
+                    }
+
+                    // 戦略3: setTransactionByPayload + requestSign (最も原始的で強力な方法)
+                    if (!sig && typeof window.SSS.setTransactionByPayload === 'function') {
+                        try {
+                            log('Trying setTransactionByPayload + requestSign...');
+                            window.SSS.setTransactionByPayload(payload);
+                            const result = await callSSS('requestSign', null);
                             if (typeof result === 'string' && result.length > 128) {
-                                // 署名済みペイロードから署名を抽出 (V1/V2共通の署名位置)
                                 sig = result.substring(16, 144);
                             } else if (result && result.signature) {
                                 sig = result.signature;
@@ -1565,15 +1551,27 @@
                             } else if (result && result.payload) {
                                 sig = result.payload.substring(16, 144);
                             }
-                        } catch (e) {
-                            log(`Fallback requestSign failed: ${e.message}`, 'error');
-                            throw e;
-                        }
+                        } catch (e) { log(`setTransactionByPayload failed: ${e.message}`, 'warn'); }
                     }
-                    else {
-                        const allAvailableKeys = [...sssMethods, ...sssAccountMethods.map(m => 'account.' + m)].join(', ');
-                        log(`Available methods: ${allAvailableKeys}`, 'error');
-                        throw new Error('SSSの署名機能が見つかりません。最新版のSSSを使用するか、確実な「直接モード（秘密鍵）」での購入をお試しください。');
+
+                    // 戦略4: 古い SSS の requestSign (Transactionオブジェクト)
+                    if (!sig && typeof window.SSS.requestSign === 'function') {
+                        try {
+                            log('Trying legacy requestSign...');
+                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                            window.SSS.setTransaction(aggregateTransaction);
+                            const result = await callSSS('requestSign', null);
+                            if (typeof result === 'string' && result.length > 128) {
+                                sig = result.substring(16, 144);
+                            } else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            }
+                        } catch (e) { log(`Legacy requestSign failed: ${e.message}`, 'warn'); }
+                    }
+
+                    if (!sig) {
+                        throw new Error('すべての署名試行が失敗しました。最新版のSSSを使用するか、確実な「直接モード（秘密鍵）」での購入をお試しください。');
                     }
                 } catch (signErr) {
                     console.error('SSS Signing Detailed Error:', signErr);
