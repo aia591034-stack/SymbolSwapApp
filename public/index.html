@@ -1477,7 +1477,7 @@
                         const promise = (param !== undefined && param !== null) ? context[method](param) : context[method]();
                         return await Promise.race([
                             promise,
-                            new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 20000))
+                            new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 30000))
                         ]);
                     } catch (e) {
                         log(`Direct error from ${method}: ${e.message}`, 'error');
@@ -1518,6 +1518,7 @@
                             try {
                                 log(`Attempt C: ${foundCosignMethod}({parentHash: hash})`);
                                 const result = await callSSS(foundCosignMethod, { parentHash: hash });
+                                log('SSS Raw Result (Attempt C):', result);
                                 if (typeof result === 'string') sig = result;
                                 else if (result && result.signature) {
                                     sig = result.signature;
@@ -1525,12 +1526,13 @@
                                 }
                             } catch (e) {
                                 log(`Attempt C failed: ${e.message}`, 'warn');
-                                
+
                                 // パターンA: ハッシュを直接渡す
                                 if (!sig) {
                                     try {
                                         log(`Attempt A: ${foundCosignMethod}(hash)`);
                                         const result = await callSSS(foundCosignMethod, hash);
+                                        log('SSS Raw Result (Attempt A):', result);
                                         if (typeof result === 'string') sig = result;
                                         else if (result && result.signature) {
                                             sig = result.signature;
@@ -1538,7 +1540,7 @@
                                         }
                                     } catch (e2) {
                                         log(`Attempt A failed: ${e2.message}`, 'warn');
-                                        
+
                                         // パターンB: Transactionオブジェクトを渡す
                                         if (!sig && foundCosignMethod.includes('Transaction')) {
                                             try {
@@ -1546,6 +1548,7 @@
                                                 const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
                                                 const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
                                                 const result = await callSSS(foundCosignMethod, cosignatureTransaction);
+                                                log('SSS Raw Result (Attempt B):', result);
                                                 if (typeof result === 'string') sig = result;
                                                 else if (result && result.signature) {
                                                     sig = result.signature;
@@ -1565,6 +1568,7 @@
                             log('Trying setTransactionByPayload + requestSign...');
                             window.SSS.setTransactionByPayload(payload);
                             const result = await callSSS('requestSign', null);
+                            log('SSS Raw Result (setTransactionByPayload):', result);
                             if (typeof result === 'string' && result.length > 128) {
                                 sig = result.substring(16, 144);
                             } else if (result && result.signature) {
@@ -1583,6 +1587,7 @@
                             const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
                             window.SSS.setTransaction(aggregateTransaction);
                             const result = await callSSS('requestSign', null);
+                            log('SSS Raw Result (legacy requestSign):', result);
                             if (typeof result === 'string' && result.length > 128) {
                                 sig = result.substring(16, 144);
                             } else if (result && result.signature) {
@@ -1602,6 +1607,7 @@
                 }
 
                 if (!sig || sig.length !== 128) {
+                    log(`Invalid signature data obtained. Length: ${sig ? sig.length : 0}`, 'error');
                     throw new Error(`有効な署名データが取得できませんでした。 (length: ${sig ? sig.length : 0})`);
                 }
 
@@ -1610,6 +1616,8 @@
                     if (pubKey.hex) pubKey = pubKey.hex();
                     else if (pubKey.toString) pubKey = pubKey.toString();
                 }
+                log(`Extracted Signature: ${sig}`);
+                log(`Extracted Signer Public Key: ${pubKey}`);
 
                 log('Cosignature obtained successfully');
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);

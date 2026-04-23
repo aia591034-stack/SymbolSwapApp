@@ -303,9 +303,12 @@ app.post('/api/announce_transaction', async (req, res) => {
     try {
         const { payload, cosignatures } = req.body;
 
-        if (!payload) {
-            return res.status(400).json({ success: false, error: "ペイロードがありません" });
-        }
+            console.log(`[DEBUG] Received payload from client: ${payload.substring(0, 100)}...`);
+            console.log(`[DEBUG] Received cosignatures from client: ${JSON.stringify(cosignatures)}`);
+
+            if (!payload) {
+                return res.status(400).json({ success: false, error: "Payload is required" });
+            }
 
         // 【究極の修正】取引を再構築せず、クライアントから送られたペイロードを直接デシリアライズする。
         // これにより、署名時のデータ（DeadlineやMerkleRoot等）が100%保持されます。
@@ -333,19 +336,25 @@ app.post('/api/announce_transaction', async (req, res) => {
         const response = await fetch(`${NODE_URL}/transactions`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload: finalPayload })
+            body: JSON.stringify({ payload: combinedPayload })
         });
+
+        const responseText = await response.text();
+        console.log(`[DEBUG] Node response status: ${response.status}`);
+        console.log(`[DEBUG] Node response text: ${responseText}`);
 
         if (response.ok) {
             res.json({ success: true, message: "トランザクションを送信しました", hash: finalHash });
         } else {
-            const errorData = await response.json();
-            console.error("Node Error:", errorData);
-            res.status(response.status).json({ 
-                success: false, 
-                error: errorData.code || "アナウンス失敗", 
-                details: errorData.message || JSON.stringify(errorData) 
-            });
+            let errorDetails = responseText;
+            try {
+                const errorJson = JSON.parse(responseText);
+                errorDetails = errorJson.message || errorJson.code || responseText;
+            } catch (e) {
+                // JSONパースエラーの場合はそのままテキストを使用
+            }
+            console.error(`[ERROR] Node announcement failed: ${errorDetails}`);
+            res.status(response.status).json({ success: false, error: `Announce Error: ${errorDetails}` });
         }
     } catch (error) {
         console.error("Announce Error:", error);
