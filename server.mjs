@@ -342,6 +342,9 @@ app.post('/api/announce_transaction', async (req, res) => {
         });
 
         const finalPayload = utils.uint8ToHex(combinedPayload);
+        const finalHash = facade.hashTransaction(aggregateTx).toString();
+        console.log(`[DEBUG] Final Payload Length: ${combinedPayload.length}`);
+        console.log(`[DEBUG] Final Hash: ${finalHash}`);
 
         // ノードにアナウンス
         const response = await fetch(`${NODE_URL}/transactions`, {
@@ -351,7 +354,7 @@ app.post('/api/announce_transaction', async (req, res) => {
         });
 
         if (response.ok) {
-            res.json({ success: true, message: "トランザクションを送信しました" });
+            res.json({ success: true, message: "トランザクションを送信しました", hash: finalHash });
         } else {
             const errorData = await response.json();
             console.error("Node Error:", errorData);

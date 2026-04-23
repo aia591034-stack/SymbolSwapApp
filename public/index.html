@@ -1434,7 +1434,8 @@
                     const announceData = await announceRes.json();
                     if (announceData.success) {
                         log('Transaction broadcasted via Direct Mode (V2)', 'success');
-                        checkStatus(hash, activeAddress, p);
+                        const finalHash = announceData.hash || hash;
+                        checkStatus(finalHash, activeAddress, p);
                     } else {
                         throw new Error(announceData.error + (announceData.details ? `: ${announceData.details}` : ''));
                     }
@@ -1560,7 +1561,9 @@
 
                 if (data.success) {
                     log('Transaction broadcasted', 'success');
-                    checkStatus(hash, activeAddress, p);
+                    // サーバーから返された最新のハッシュを使用する
+                    const finalHash = data.hash || hash;
+                    checkStatus(finalHash, activeAddress, p);
                 } else {
                     const errorDetail = data.details ? ` (${data.details})` : '';
                     throw new Error(`${data.error}${errorDetail}`);
