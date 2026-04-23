@@ -1514,30 +1514,46 @@
                         const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
                         if (foundCosignMethod) {
                             log(`Trying Dynamic Method: ${foundCosignMethod}`);
-                            // パターンA: ハッシュを渡す (多くの環境でこれが正解)
+                            // パターンC: オブジェクト形式でハッシュを渡す (SSS v2.3.0+ の一部環境)
                             try {
-                                log(`Attempt A: ${foundCosignMethod}(hash)`);
-                                const result = await callSSS(foundCosignMethod, hash);
+                                log(`Attempt C: ${foundCosignMethod}({parentHash: hash})`);
+                                const result = await callSSS(foundCosignMethod, { parentHash: hash });
                                 if (typeof result === 'string') sig = result;
                                 else if (result && result.signature) {
                                     sig = result.signature;
                                     pubKey = result.signerPublicKey || pubKey;
                                 }
                             } catch (e) {
-                                log(`Attempt A failed: ${e.message}`, 'warn');
-                                // パターンB: Transactionオブジェクトを渡す
-                                if (!sig && foundCosignMethod.includes('Transaction')) {
+                                log(`Attempt C failed: ${e.message}`, 'warn');
+                                
+                                // パターンA: ハッシュを直接渡す
+                                if (!sig) {
                                     try {
-                                        log(`Attempt B: ${foundCosignMethod}(TransactionObject)`);
-                                        const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
-                                        const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
-                                        const result = await callSSS(foundCosignMethod, cosignatureTransaction);
+                                        log(`Attempt A: ${foundCosignMethod}(hash)`);
+                                        const result = await callSSS(foundCosignMethod, hash);
                                         if (typeof result === 'string') sig = result;
                                         else if (result && result.signature) {
                                             sig = result.signature;
                                             pubKey = result.signerPublicKey || pubKey;
                                         }
-                                    } catch (e2) { log(`Attempt B failed: ${e2.message}`, 'warn'); }
+                                    } catch (e2) {
+                                        log(`Attempt A failed: ${e2.message}`, 'warn');
+                                        
+                                        // パターンB: Transactionオブジェクトを渡す
+                                        if (!sig && foundCosignMethod.includes('Transaction')) {
+                                            try {
+                                                log(`Attempt B: ${foundCosignMethod}(TransactionObject)`);
+                                                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                                                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                                                const result = await callSSS(foundCosignMethod, cosignatureTransaction);
+                                                if (typeof result === 'string') sig = result;
+                                                else if (result && result.signature) {
+                                                    sig = result.signature;
+                                                    pubKey = result.signerPublicKey || pubKey;
+                                                }
+                                            } catch (e3) { log(`Attempt B failed: ${e3.message}`, 'warn'); }
+                                        }
+                                    }
                                 }
                             }
                         }
