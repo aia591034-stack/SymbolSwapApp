@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AETHER MARKET - 次世代デジタルアセット・ハブ</title>
     <!-- Tailwind CSS for Professional UI -->
+    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -1439,25 +1440,36 @@
                         // SSS v2.x 以降の標準的なコサイン署名
                         const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
                         signedCosignature = await window.SSS.activeAccount.signCosignatureTransaction(cosignatureTransaction);
+                        console.log('SSS Result (Standard):', signedCosignature);
                     } else if (typeof window.SSS.requestSignCosignature === 'function') {
                         // 一部の環境でのフォールバック
                         signedCosignature = await window.SSS.requestSignCosignature(hash);
+                        console.log('SSS Result (Fallback 1):', signedCosignature);
                     } else {
                         // 最終手段: 通常の署名リクエストからコサイン署名データを抽出
                         log('Standard Cosignature not found, falling back to requestSign...', 'warn');
                         window.SSS.setTransaction(aggregateTransaction);
                         const result = await window.SSS.requestSign();
+                        console.log('SSS Result (Fallback 2):', result);
                         signedCosignature = {
                             signature: result.signature,
                             signerPublicKey: result.signerPublicKey
                         };
                     }
                 } catch (signErr) {
-                    log(`SSS Signing Error: ${signErr.message}`, 'error');
+                    console.error('SSS Signing Detailed Error:', signErr);
+                    log(`SSS Signing Error: ${signErr.message || signErr}`, 'error');
                     throw signErr;
                 }
                 
-                if (!signedCosignature?.signature) throw new Error('Protocol rejected by user or invalid signature data');
+                // 署名データの存在確認と、プロパティ名の揺れ（大文字小文字など）への対応
+                const sig = signedCosignature?.signature || signedCosignature?.Signature;
+                const pubKey = signedCosignature?.signerPublicKey || signedCosignature?.SignerPublicKey || signedCosignature?.publicKey;
+
+                if (!sig) {
+                    console.error('Missing signature in object:', signedCosignature);
+                    throw new Error('SSSから署名データが返されませんでした。パスワード入力後にキャンセルしたか、SSSの設定を確認してください。');
+                }
 
                 showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
                 const res = await fetch('/api/announce_transaction', {
@@ -1467,8 +1479,8 @@
                         payload: payload,
                         cosignatures: [{
                             parentHash: hash,
-                            signature: signedCosignature.signature,
-                            signerPublicKey: signedCosignature.signerPublicKey
+                            signature: sig,
+                            signerPublicKey: pubKey
                         }]
                     })
                 });

@@ -2,8 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
 
-console.log('--- AETHER MARKET SERVER STARTING (v1.0.2) ---');
+console.log('--- AETHER MARKET SERVER STARTING (v1.1.3) ---');
 
 // ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
 import * as symbol_pkg_main from 'symbol-sdk';
@@ -12,14 +13,18 @@ import * as symbol_pkg_core from 'symbol-sdk/symbol';
 // SDK v3 の正しいクラス参照を定義
 const { SymbolFacade, KeyPair, models } = symbol_pkg_core;
 const { PrivateKey, PublicKey, Signature, utils } = symbol_pkg_main;
-import multer from 'multer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// アップロード先の設定 (Vercel環境では /tmp を使用)
+const uploadDir = process.env.VERCEL ? '/tmp' : path.join(__dirname, 'uploads');
 
 // multerの設定: アップロードされたファイルを保存
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = process.env.VERCEL ? '/tmp' : 'uploads/';
         try {
-            if (!process.env.VERCEL && !fs.existsSync(uploadDir)) {
+            if (!fs.existsSync(uploadDir)) {
                 fs.mkdirSync(uploadDir, { recursive: true });
             }
             cb(null, uploadDir);
@@ -28,15 +33,11 @@ const storage = multer.diskStorage({
         }
     },
     filename: (req, file, cb) => {
-        // ファイル名をユニークにする（タイムスタンプ + 元の拡張子）
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage: storage });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -44,6 +45,9 @@ const port = process.env.PORT || 3000;
 // 絶対パスを使用して静的ファイルを配信
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
+// アップロードされたファイルを配信するルート (IPFS失敗時のフォールバック用)
+app.use('/uploads', express.static(uploadDir));
 
 // Symbol SDK v3 のブラウザ用バイナリを配信
 app.get('/lib/symbol-sdk-v3.js', (req, res) => {
@@ -63,11 +67,15 @@ app.get('/lib/symbol-sdk-v3.js', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         status: 'ok', 
-        version: '1.1.2', 
+        version: '1.1.3', 
         node: process.version,
         sdk: {
             hasPrivateKey: typeof PrivateKey === 'function',
             hasSymbolFacade: typeof SymbolFacade === 'function'
+        },
+        env: {
+            isVercel: !!process.env.VERCEL,
+            hasPinata: !!process.env.PINATA_API_KEY
         }
     });
 });
@@ -89,6 +97,7 @@ async function uploadToPinata(filePath, fileName) {
     }
 
     try {
+        console.log(`[INFO] Uploading to Pinata: ${fileName}`);
         const formData = new FormData();
         const fileContent = fs.readFileSync(filePath);
         // Node.js 22 の Blob を使用
@@ -109,11 +118,11 @@ async function uploadToPinata(filePath, fileName) {
             return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
         } else {
             const errorText = await response.text();
-            console.error("Pinata Upload Error:", errorText);
+            console.error(`[ERROR] Pinata API Error (Status ${response.status}):`, errorText);
             return null;
         }
     } catch (error) {
-        console.error("IPFS Upload Failed:", error);
+        console.error(`[ERROR] Pinata Upload Process Failed:`, error);
         return null;
     }
 }
@@ -450,7 +459,7 @@ app.get('/api/products/:id/download', (req, res) => {
         const secretStr = product.secret.replace('URL: ', '');
         if (secretStr.startsWith('http')) {
             const filename = path.basename(secretStr);
-            const filePath = path.join(__dirname, 'uploads', filename);
+            const filePath = path.join(uploadDir, filename);
             
             if (fs.existsSync(filePath)) {
                 res.download(filePath, product.fileName || filename);
@@ -484,19 +493,27 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/products', upload.single('file'), async (req, res) => {
     try {
+        console.log(`[POST] /api/products started. Body:`, JSON.stringify(req.body));
         const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl, saleType, mosaicId } = req.body;
         const file = req.file;
+        
         if (!file) {
-            console.error("[400] Registration failed: No file uploaded");
+            console.error("[400] Registration failed: req.file is undefined. Check multipart/form-data config.");
             return res.status(400).json({ error: "ファイルがありません。商品には必ずデジタルファイルの添付が必要です。" });
         }
 
+        console.log(`[INFO] Received file: ${file.originalname}, Size: ${file.size}, Path: ${file.path}`);
+
         // IPFS にアップロードを試みる
-        const ipfsUrl = await uploadToPinata(file.path, file.originalname);
+        let ipfsUrl = null;
+        try {
+            ipfsUrl = await uploadToPinata(file.path, file.originalname);
+        } catch (pinataErr) {
+            console.error(`[ERROR] uploadToPinata failed:`, pinataErr);
+        }
         
-        // Vercel環境での警告（Pinataがない場合）
-        if (process.env.VERCEL && !ipfsUrl) {
-            console.warn("Vercel環境ですが Pinata APIキーが設定されていないため、ファイルは一時保存のみとなります（数分で消えます）");
+        if (ipfsUrl) {
+            console.log(`[SUCCESS] IPFS Upload: ${ipfsUrl}`);
         }
 
         const protocol = req.protocol;
@@ -551,7 +568,7 @@ app.patch('/api/products/:id', (req, res) => {
         if (description) product.description = description;
         if (imageUrl) product.imageUrl = imageUrl;
         if (saleType) product.saleType = saleType;
-        if (mosaicId !== undefined) product.mosaicId = mosaicId;
+        if (mosaicId) product.mosaicId = mosaicId;
 
         saveProducts(products);
         res.json({ success: true, product });
@@ -560,6 +577,7 @@ app.patch('/api/products/:id', (req, res) => {
     }
 });
 
+// 商品の削除
 app.delete('/api/products/:id', (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -586,17 +604,8 @@ app.delete('/api/products/:id', (req, res) => {
     }
 });
 
-// API 404 ハンドラー (HTML ではなく JSON を返すようにする)
-// Express 5.x では '*' にパラメータ名が必要なため、単に '/api' を使用（接頭辞一致）
-app.use('/api', (req, res) => {
-    console.warn(`[404] API route not found: ${req.originalUrl}`);
-    res.status(404).json({ error: `API route not found: ${req.originalUrl}. もしこのURLが正しいはずなら、サーバーを再起動して最新のコードが反映されているか確認してください。` });
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
 });
-
-if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
-    app.listen(port, () => {
-        console.log(`サーバーが正常に起動しました: http://localhost:${port}`);
-    });
-}
 
 export default app;
