@@ -1470,12 +1470,19 @@
                 } else if (signedCosignature) {
                     sig = signedCosignature.signature || signedCosignature.Signature;
                     pubKey = signedCosignature.signerPublicKey || signedCosignature.SignerPublicKey || signedCosignature.publicKey || activePublicKey;
+                    
+                    // 【重要】もし signature が無く payload がある場合、ペイロードから署名を抽出
+                    if (!sig && signedCosignature.payload && signedCosignature.payload.length >= 144) {
+                        log('Extracting signature from payload...');
+                        // Symbolの署名済みペイロード形式: size(8hex) + padding(8hex) + signature(128hex)
+                        sig = signedCosignature.payload.substring(16, 144);
+                    }
                 }
 
                 if (!sig) {
                     const keys = signedCosignature ? Object.keys(signedCosignature).join(', ') : 'null';
                     console.error('Signature missing. Object keys:', keys);
-                    throw new Error(`SSSから署名データが返されませんでした。(返却データ形式: ${keys}) パスワード入力後にキャンセルしたか、SSSの設定を確認してください。`);
+                    throw new Error(`SSSから署名データが返されませんでした。(返却データ形式: ${keys}) SSSの設定で「コサイン署名」が許可されているか確認してください。`);
                 }
 
                 log('Cosignature obtained successfully');
