@@ -271,6 +271,11 @@
         <div class="mt-12 w-48 md:w-64 bg-white/5 h-1 rounded-full overflow-hidden">
             <div id="swap-progress-bar" class="h-full bg-indigo-500 w-0 transition-all duration-500"></div>
         </div>
+        <!-- 閉じるボタンを追加 -->
+        <button onclick="hideSwapOverlay(true)"
+            class="mt-8 px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white/5">
+            オーバーレイを閉じてログを確認
+        </button>
     </div>
 
     <!-- Navigation -->
@@ -774,6 +779,15 @@
             easing: 'ease-out-cubic'
         });
 
+        // グローバルエラーハンドラ
+        window.onerror = function (message, source, lineno, colno, error) {
+            log(`[GLOBAL ERROR] ${message} at ${source}:${lineno}`, 'error');
+            return false;
+        };
+        window.onunhandledrejection = function (event) {
+            log(`[PROMISE ERROR] ${event.reason}`, 'error');
+        };
+
         const symbol = require("/node_modules/symbol-sdk");
         const logContainer = document.getElementById('log-container');
         const toast = document.getElementById('toast');
@@ -1034,7 +1048,14 @@
             swapProgressBar.style.width = progress + '%';
         }
 
-        function hideSwapOverlay() {
+        function hideSwapOverlay(force = false) {
+            if (force) {
+                swapOverlay.style.display = 'none';
+                swapOverlay.style.opacity = '1';
+                swapProgressBar.style.width = '0%';
+                document.getElementById('direct-manual-msg').classList.add('hidden');
+                return;
+            }
             setTimeout(() => {
                 swapOverlay.style.opacity = '0';
                 setTimeout(() => {
@@ -1444,19 +1465,23 @@
 
                 // SSS連携の場合
                 showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
+                log('SSS Signing process started');
 
                 // 署名データの抽出（様々なデータ構造に対応）
                 let sig = null;
                 let pubKey = activePublicKey;
 
                 try {
-                    log('Requesting SSS Cosignature...');
+                    log('Checking SSS Methods...');
+                    if (!window.SSS) {
+                        throw new Error('window.SSS が見つかりません。拡張機能がインストールされ、有効になっているか確認してください。');
+                    }
 
                     // デバッグ用: SSSのメソッドを列挙
                     const sssMethods = Object.keys(window.SSS).filter(k => typeof window.SSS[k] === 'function');
                     const sssAccountMethods = window.SSS.activeAccount ? Object.keys(window.SSS.activeAccount).filter(k => typeof window.SSS.activeAccount[k] === 'function') : [];
-                    console.log('SSS Methods:', sssMethods);
-                    console.log('SSS Account Methods:', sssAccountMethods);
+                    log(`Detected SSS Methods: ${sssMethods.join(', ')}`);
+                    log(`Detected SSS Account Methods: ${sssAccountMethods.join(', ')}`);
 
                     // 動的なメソッド検索
                     const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
