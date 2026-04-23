@@ -325,7 +325,23 @@ app.post('/api/announce_transaction', async (req, res) => {
         }
 
         // 最終的なペイロードを作成
-        const finalPayload = utils.uint8ToHex(aggregateTx.serialize());
+        // 【重要】SDK v3 では AggregateTransaction の serialize がコサイン署名を含めて size を更新してしまう。
+        // Symbol ノードはトランザクションヘッダーの size にコサイン署名を含めないことを期待するため、
+        // 手動でバイナリを結合してペイロードを作成する。
+        const cosignaturesData = aggregateTx.cosignatures.map(cs => cs.serialize());
+        aggregateTx.cosignatures = []; // 一時的に空にする
+        
+        const basePayload = aggregateTx.serialize();
+        const combinedPayload = new Uint8Array(basePayload.length + cosignaturesData.reduce((acc, curr) => acc + curr.length, 0));
+        combinedPayload.set(basePayload);
+        
+        let offset = basePayload.length;
+        cosignaturesData.forEach(data => {
+            combinedPayload.set(data, offset);
+            offset += data.length;
+        });
+
+        const finalPayload = utils.uint8ToHex(combinedPayload);
 
         // ノードにアナウンス
         const response = await fetch(`${NODE_URL}/transactions`, {

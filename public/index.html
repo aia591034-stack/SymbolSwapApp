@@ -1413,7 +1413,9 @@
 
                     // アグリゲートトランザクションへのコサイン署名を作成
                     // SDK v2 での直接署名処理 (ハッシュに対して署名)
-                    const signature = buyerAccount.signData(hash);
+                    const sigResult = buyerAccount.signData(hash);
+                    const signature = typeof sigResult === 'string' ? sigResult : (sigResult.signature || sigResult);
+                    const buyerPubKey = typeof buyerAccount.publicKey === 'string' ? buyerAccount.publicKey : buyerAccount.publicKey.toString();
 
                     showSwapOverlay('Finalizing', '署名を結合中...', 70);
                     const announceRes = await fetch('/api/announce_transaction', {
@@ -1424,7 +1426,7 @@
                             cosignatures: [{
                                 parentHash: hash,
                                 signature: signature,
-                                signerPublicKey: buyerAccount.publicKey
+                                signerPublicKey: buyerPubKey
                             }]
                         })
                     });
