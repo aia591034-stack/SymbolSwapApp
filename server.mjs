@@ -318,8 +318,8 @@ app.post('/api/announce_transaction', async (req, res) => {
                     return;
                 }
                 const cosignature = new models.Cosignature();
-                cosignature.signerPublicKey = new PublicKey(utils.hexToUint8(cs.signerPublicKey));
-                cosignature.signature = new Signature(utils.hexToUint8(cs.signature));
+                cosignature.signerPublicKey = new models.PublicKey(utils.hexToUint8(cs.signerPublicKey));
+                cosignature.signature = new models.Signature(utils.hexToUint8(cs.signature));
                 aggregateTx.cosignatures.push(cosignature);
             });
         }
