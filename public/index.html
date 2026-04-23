@@ -763,6 +763,7 @@
     </div>
 
     <script src="https://xembook.github.io/nem2-browserify/symbol-sdk-2.0.4.js"></script>
+    <script src="/lib/symbol-sdk-v3.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // AOS Initialize
@@ -1437,12 +1438,40 @@
                 try {
                     log('Requesting SSS Cosignature...');
 
+                    // デバッグ用: SSSのメソッドを列挙
+                    const sssMethods = Object.keys(window.SSS).filter(k => typeof window.SSS[k] === 'function');
+                    const sssAccountMethods = window.SSS.activeAccount ? Object.keys(window.SSS.activeAccount).filter(k => typeof window.SSS.activeAccount[k] === 'function') : [];
+                    console.log('SSS Methods:', sssMethods);
+                    console.log('SSS Account Methods:', sssAccountMethods);
+
+                    // 動的なメソッド検索
+                    const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
+                    const foundAccountCosignMethod = sssAccountMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
+
                     if (typeof window.SSS.requestSignCosignature === 'function') {
                         log('Method: requestSignCosignature');
                         const result = await window.SSS.requestSignCosignature(hash);
                         if (typeof result === 'string') {
                             sig = result;
                         } else if (result && result.signature) {
+                            sig = result.signature;
+                            pubKey = result.signerPublicKey || pubKey;
+                        }
+                    }
+                    else if (foundCosignMethod) {
+                        log(`Method: ${foundCosignMethod} (Dynamic)`);
+                        const result = await window.SSS[foundCosignMethod](hash);
+                        if (typeof result === 'string') sig = result;
+                        else if (result && result.signature) {
+                            sig = result.signature;
+                            pubKey = result.signerPublicKey || pubKey;
+                        }
+                    }
+                    else if (window.SSS.activeAccount && foundAccountCosignMethod) {
+                        log(`Method: activeAccount.${foundAccountCosignMethod} (Dynamic)`);
+                        const result = await window.SSS.activeAccount[foundAccountCosignMethod](hash);
+                        if (typeof result === 'string') sig = result;
+                        else if (result && result.signature) {
                             sig = result.signature;
                             pubKey = result.signerPublicKey || pubKey;
                         }
@@ -1455,9 +1484,43 @@
                         sig = result.signature;
                         pubKey = result.signerPublicKey || pubKey;
                     }
+                    else if (typeof window.SSS.requestSign === 'function') {
+                        // フォールバック: 通常の署名リクエストを試みる
+                        log('Method: requestSign (Fallback for old SSS)');
+                        try {
+                            // SDK v3 が利用可能かチェック
+                            let aggregateTransaction;
+                            if (window.symbol_sdk) {
+                                log('Using SDK v3 for client-side parsing');
+                                const { models } = window.symbol_sdk.symbol;
+                                const { utils } = window.symbol_sdk;
+                                // v3 のモデルから v2 (SSSが期待する形式) への変換は困難なため
+                                // SSSがペイロードを直接受け取れるか、または SDK v2 でパースを試みる
+                            }
+
+                            aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                            window.SSS.setTransaction(aggregateTransaction);
+                            const result = await window.SSS.requestSign();
+
+                            // 署名済みペイロードまたは署名オブジェクトが返る
+                            if (typeof result === 'string' && result.length > 128) {
+                                // 署名済みペイロードから署名を抽出 (V1/V2共通の署名位置)
+                                sig = result.substring(16, 144);
+                            } else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            } else if (result && result.payload) {
+                                sig = result.payload.substring(16, 144);
+                            }
+                        } catch (e) {
+                            log(`Fallback requestSign failed: ${e.message}`, 'error');
+                            throw e;
+                        }
+                    }
                     else {
-                        log('SSS Cosignature method not found', 'error');
-                        throw new Error('SSSのコサイン署名機能が見つかりません。SSSを最新バージョンに更新するか、PCブラウザで試してください。');
+                        const allAvailableKeys = [...sssMethods, ...sssAccountMethods.map(m => 'account.' + m)].join(', ');
+                        log(`Available methods: ${allAvailableKeys}`, 'error');
+                        throw new Error('SSSの署名機能が見つかりません。最新版のSSSを使用するか、確実な「直接モード（秘密鍵）」での購入をお試しください。');
                     }
                 } catch (signErr) {
                     console.error('SSS Signing Detailed Error:', signErr);
