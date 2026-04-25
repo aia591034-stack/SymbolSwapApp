@@ -1472,24 +1472,30 @@
                 let pubKey = activePublicKey;
 
                 const callSSS = async (method, param, context = window.SSS) => {
-                    log(`Calling ${method}...`);
+                    log(`[SSS_CALL] Attempting to call SSS method: ${method} with param: ${param ? (typeof param === 'string' ? param.substring(0, 50) + '...' : JSON.stringify(param).substring(0, 50) + '...') : 'none'}`);
                     try {
                         const promise = (param !== undefined && param !== null) ? context[method](param) : context[method]();
-                        return await Promise.race([
+                        const result = await Promise.race([
                             promise,
                             new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 30000))
                         ]);
+                        log(`[SSS_CALL] SSS method ${method} returned: ${result ? (typeof result === 'string' ? result.substring(0, 50) + '...' : JSON.stringify(result).substring(0, 50) + '...') : 'no result'}`);
+                        return result;
                     } catch (e) {
-                        log(`Direct error from ${method}: ${e.message}`, 'error');
+                        log(`[SSS_CALL_ERROR] Direct error from ${method}: ${e.message}`, 'error');
                         throw e;
                     }
                 };
 
                 try {
                     log('Checking SSS Methods...');
+                    log('--- SSS Client Debug Start ---');
+                    log(`Detecting window.SSS... Is SSS object available? ${!!window.SSS}`);
                     if (!window.SSS) {
+                        log('Error: window.SSS is not available.', 'error');
                         throw new Error('window.SSS が見つかりません。拡張機能がインストールされ、有効になっているか確認してください。');
                     }
+                    log('window.SSS detected. Proceeding with SSS methods check.');
 
                     // デバッグ用: SSSのメソッドを列挙
                     const sssMethods = Object.keys(window.SSS).filter(k => typeof window.SSS[k] === 'function');
@@ -1499,6 +1505,7 @@
 
                     // 戦略1: 標準の requestSignCosignature
                     if (typeof window.SSS.requestSignCosignature === 'function') {
+                        log('Strategy 1: Attempting requestSignCosignature...');
                         try {
                             const result = await callSSS('requestSignCosignature', hash);
                             if (typeof result === 'string') sig = result;
@@ -1511,6 +1518,7 @@
 
                     // 戦略2: 動的に見つかったメソッド (requestSignCosignatureTransaction など)
                     if (!sig) {
+                        log('Strategy 2: Attempting dynamic cosign method...');
                         const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
                         if (foundCosignMethod) {
                             log(`Trying Dynamic Method: ${foundCosignMethod}`);
@@ -1564,6 +1572,7 @@
 
                     // 戦略3: setTransactionByPayload + requestSign (最も原始的で強力な方法)
                     if (!sig && typeof window.SSS.setTransactionByPayload === 'function') {
+                        log('Strategy 3: Attempting setTransactionByPayload + requestSign...');
                         try {
                             log('Trying setTransactionByPayload + requestSign...');
                             window.SSS.setTransactionByPayload(payload);
@@ -1582,6 +1591,7 @@
 
                     // 戦略4: 古い SSS の requestSign (Transactionオブジェクト)
                     if (!sig && typeof window.SSS.requestSign === 'function') {
+                        log('Strategy 4: Attempting legacy requestSign...');
                         try {
                             log('Trying legacy requestSign...');
                             const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
