@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -40,6 +41,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 const app = express();
+app.use(cors());
 const port = process.env.PORT || 3000;
 
 // 絶対パスを使用して静的ファイルを配信
