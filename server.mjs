@@ -75,7 +75,10 @@ app.get('/api/test', (req, res) => {
         },
         env: {
             isVercel: !!process.env.VERCEL,
-            hasPinata: !!process.env.PINATA_API_KEY
+            hasPinata: !!process.env.PINATA_API_KEY,
+            nodeUrl: process.env.NODE_URL,
+            operatorKey: process.env.OPERATOR_KEY ? '******' + process.env.OPERATOR_KEY.substring(process.env.OPERATOR_KEY.length - 6) : null,
+            currencyId: process.env.CURRENCY_ID
         }
     });
 });
