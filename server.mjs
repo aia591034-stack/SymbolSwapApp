@@ -171,8 +171,15 @@ let memoryProducts = [];
 // SSS連携: クライアントから「部分署名済みのアグリゲートトランザクション」を受け取り、運営(A)がアナウンスするエンドポイント
 app.post('/api/purchase_sss', async (req, res) => {
     try {
+        console.log(`[DEBUG - /api/purchase_sss] Received signedPayload: ${req.body.signedPayload ? req.body.signedPayload.substring(0, 100) + '...' : 'null'}`);
         const { signedPayload } = req.body;
-        if (!signedPayload) return res.status(400).json({ error: "署名済みデータがありません" });
+        if (!signedPayload) {
+            console.error("[ERROR - /api/purchase_sss] Signed payload is missing.");
+            return res.status(400).json({ error: "署名済みデータがありません" });
+        }
+
+        console.log(`[DEBUG - /api/purchase_sss] Sending transaction to node: ${NODE_URL}/transactions`);
+        console.log(`[DEBUG - /api/purchase_sss] Request body payload: ${signedPayload.substring(0, 100)}...`);
 
         const response = await fetch(`${NODE_URL}/transactions`, {
             method: 'PUT',
@@ -180,6 +187,7 @@ app.post('/api/purchase_sss', async (req, res) => {
             body: JSON.stringify({ payload: signedPayload })
         });
 
+        console.log(`[DEBUG - /api/purchase_sss] Node response status: ${response.status}`);
         if (response.ok) {
             res.json({ success: true, message: "トランザクションをネットワークに送信しました" });
         } else {
@@ -333,15 +341,17 @@ app.post('/api/announce_transaction', async (req, res) => {
         console.log(`[INFO] Announcing transaction. Hash: ${finalHash}`);
 
         // ノードにアナウンス
+        console.log(`[DEBUG - /api/announce_transaction] Sending finalPayload to node: ${NODE_URL}/transactions`);
+        console.log(`[DEBUG - /api/announce_transaction] Final payload body: ${finalPayload.substring(0, 100)}...`);
         const response = await fetch(`${NODE_URL}/transactions`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload: combinedPayload })
+            body: JSON.stringify({ payload: finalPayload }) // combinedPayload を finalPayload に修正
         });
 
         const responseText = await response.text();
-        console.log(`[DEBUG] Node response status: ${response.status}`);
-        console.log(`[DEBUG] Node response text: ${responseText}`);
+        console.log(`[DEBUG - /api/announce_transaction] Node response status: ${response.status}`);
+        console.log(`[DEBUG - /api/announce_transaction] Node response text: ${responseText}`);
 
         if (response.ok) {
             res.json({ success: true, message: "トランザクションを送信しました", hash: finalHash });
