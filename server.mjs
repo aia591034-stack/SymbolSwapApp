@@ -5,13 +5,7 @@ import path from 'path';
 import multer from 'multer';
 import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
-import {
-    PrivateKey,
-    PublicKey,
-    Signature,
-    SymbolFacade,
-    utils
-} from 'symbol-sdk';
+import * as symbolSdkModule from 'symbol-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,17 +22,37 @@ const kv = createClient({
 app.use(cors());
 app.use(express.json());
 
-// --- ネットワーク設定 ---
+// --- Symbol SDK v3 の互換性確保 ---
+let SDK = symbolSdkModule;
+if (SDK.default && !SDK.SymbolFacade) {
+    SDK = SDK.default;
+}
+if (SDK.default && !SDK.SymbolFacade) {
+    SDK = SDK.default; // 2重ラップ対応
+}
+
+const { SymbolFacade, PrivateKey, PublicKey, Signature, utils } = SDK;
+
+// 初期化
+let facade;
+try {
+    if (SymbolFacade) {
+        facade = new SymbolFacade('testnet');
+    }
+} catch (e) {
+    console.error("Facade Init Error:", e);
+}
+
+// ネットワーク定数
 const CURRENCY_ID = '72C0212E67A08BCE'; 
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
 const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC';
 
-const facade = new SymbolFacade('testnet');
-
-// --- ストレージ設定 (Vercelの読込専用制限への対応) ---
-// Vercel環境では /tmp のみ書き込み可能
+// --- パス設定 (Vercel対応) ---
 const isVercel = process.env.VERCEL === '1';
-const uploadDir = isVercel ? '/tmp' : path.join(__dirname, 'uploads');
+const rootDir = process.cwd();
+const publicDir = path.join(rootDir, 'public');
+const uploadDir = isVercel ? '/tmp' : path.join(rootDir, 'uploads');
 
 if (!isVercel && !fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -68,12 +82,9 @@ async function getProducts() {
 async function saveProducts(products) {
     try {
         await kv.set("products", products);
-    } catch (e) { console.error("KV Save Error:", e); }
+    } catch (e) { }
 }
 
-/**
- * オンチェーン購入確認
- */
 async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
     try {
         const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
@@ -87,38 +98,36 @@ async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productT
         ];
 
         for (const url of endpoints) {
-            const res = await fetch(url);
-            if (!res.ok) continue;
-            const data = await res.json();
-            if (!data.data) continue;
-
-            for (const txWrapper of data.data) {
-                const tx = txWrapper.transaction;
-                if (!tx) continue;
-                
-                const isMatchingTransfer = (e) => {
-                    if (!e || (e.type !== 16717 && e.type !== 'TRANSFER')) return false;
-                    let recipient = (e.recipientAddress || e.recipient || '');
-                    if (typeof recipient === 'object' && recipient.address) recipient = recipient.address;
-                    const cleanRecipient = String(recipient).replace(/-/g, '').toUpperCase();
-                    
-                    const mosaics = e.mosaics || [];
-                    const hasAmount = mosaics.some(m => {
-                        const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
-                        return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
-                    });
-                    return cleanRecipient === cleanSeller && hasAmount;
-                };
-
-                if (tx.type === 16705 || tx.type === 16961) {
-                    const embedded = tx.transactions || [];
-                    if (embedded.some(etx => isMatchingTransfer(etx.transaction))) return true;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) continue;
+                const data = await res.json();
+                if (!data.data) continue;
+                for (const txWrapper of data.data) {
+                    const tx = txWrapper.transaction;
+                    if (!tx) continue;
+                    const isMatchingTransfer = (e) => {
+                        if (!e || (e.type !== 16717 && e.type !== 'TRANSFER')) return false;
+                        let recipient = (e.recipientAddress || e.recipient || '');
+                        if (typeof recipient === 'object' && recipient.address) recipient = recipient.address;
+                        const cleanRecipient = String(recipient).replace(/-/g, '').toUpperCase();
+                        const mosaics = e.mosaics || [];
+                        const hasAmount = mosaics.some(m => {
+                            const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
+                            return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
+                        });
+                        return cleanRecipient === cleanSeller && hasAmount;
+                    };
+                    if (tx.type === 16705 || tx.type === 16961) {
+                        const embedded = tx.transactions || [];
+                        if (embedded.some(etx => isMatchingTransfer(etx.transaction))) return true;
+                    }
+                    if (isMatchingTransfer(tx)) return true;
                 }
-                if (isMatchingTransfer(tx)) return true;
-            }
+            } catch (e) { }
         }
-        return false;
-    } catch (e) { return false; }
+    } catch (e) { }
+    return false;
 }
 
 async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
@@ -129,19 +138,16 @@ async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, produc
     return false;
 }
 
-// --- API ROUTES ---
+// --- API ---
 
 app.get('/api/config', (req, res) => {
     try {
+        if (!SymbolFacade || !PrivateKey) throw new Error("SDK Load Failed");
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-        res.json({ 
-            operatorPublicKey: opPubKey.toString(), 
-            currencyId: CURRENCY_ID,
-            status: "ready"
-        });
+        res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID, status: "ready" });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: e.message, sdkType: typeof SDK, sdkKeys: Object.keys(SDK) });
     }
 });
 
@@ -156,11 +162,9 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(req.params.id));
         if (!p) return res.status(404).json({ error: "Not found" });
-
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         const opAddr = facade.network.publicKeyToAddress(opPubKey).toString();
-
         const isAuthorized = (address === p.sellerAddress || address === opAddr);
         if (!isAuthorized && address) {
             if (await verifyPurchaseOnChain(address, p.sellerAddress, p.price, p.title)) {
@@ -178,13 +182,10 @@ app.get('/api/products/:id/download', async (req, res) => {
         const products = await getProducts();
         const product = products.find(p => String(p.id) === String(id));
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
-
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         const OP_ADDR = facade.network.publicKeyToAddress(opPubKey).toString();
-
         let isAuthorized = (address === product.sellerAddress || address === OP_ADDR);
-
         if (!isAuthorized && address) {
             if (signature === 'SSS_AUTH') {
                 isAuthorized = await verifyPurchaseOnChain(address, product.sellerAddress, product.price, product.title);
@@ -194,12 +195,9 @@ app.get('/api/products/:id/download', async (req, res) => {
                 if (isValid) isAuthorized = await verifyPurchaseOnChain(address, product.sellerAddress, product.price, product.title);
             }
         }
-
         if (!isAuthorized) return res.status(403).json({ error: "Unauthorized" });
-
         const secretStr = product.secret.replace('URL: ', '');
         if (secretStr.startsWith('http')) return res.redirect(secretStr);
-        
         const filePath = path.join(uploadDir, path.basename(secretStr));
         if (fs.existsSync(filePath)) return res.download(filePath, product.fileName);
         res.status(404).json({ error: "File not found" });
@@ -210,11 +208,9 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
     try {
         const { title, price, sellerAddress, sellerPublicKey, description, imageUrl } = req.body;
         if (!req.file) return res.status(400).json({ error: "No file" });
-
         const productId = Date.now();
         const host = req.get('host');
         const secretUrl = `${req.protocol}://${host}/api/products/${productId}/download`;
-
         const products = await getProducts();
         const newProduct = {
             id: productId, title, price: parseInt(price), sellerAddress, sellerPublicKey,
@@ -246,7 +242,6 @@ app.post('/api/build_transaction', async (req, res) => {
         const p = products.find(prod => String(prod.id) === String(productId));
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-
         const tx1 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: new PublicKey(utils.hexToUint8(buyerPublicKey)),
@@ -260,7 +255,6 @@ app.post('/api/build_transaction', async (req, res) => {
             recipientAddress: facade.network.publicKeyToAddress(new PublicKey(utils.hexToUint8(buyerPublicKey))),
             message: new TextEncoder().encode(p.secret)
         });
-
         const aggregateTx = facade.transactionFactory.create({
             type: 'aggregate_complete_transaction_v2',
             signerPublicKey: opPubKey,
@@ -270,7 +264,6 @@ app.post('/api/build_transaction', async (req, res) => {
         });
         facade.constructor.attachMaxFee(aggregateTx, 100);
         aggregateTx.signature = facade.sign(aggregateTx, opPrivKey);
-
         res.json({ success: true, payload: utils.uint8ToHex(aggregateTx.serialize()), hash: facade.hashTransaction(aggregateTx).toString() });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -298,14 +291,11 @@ app.post('/api/announce_transaction', async (req, res) => {
 });
 
 // 静的ファイルの提供
-const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 app.use('/uploads', express.static(uploadDir));
-
 app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
 }
-
 export default app;
