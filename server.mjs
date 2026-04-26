@@ -288,7 +288,19 @@ app.get('/api/config', (req, res) => {
     res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID });
 });
 
-app.use(express.static('public'));
+// Static files
+const publicDir = path.join(__dirname, 'public');
+app.use(express.static(publicDir));
 app.use('/uploads', express.static(uploadDir));
-app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
+
+// Root route (Vercelで確実に index.html を返すための設定)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// Start server
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
+}
 export default app;
+
