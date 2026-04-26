@@ -1066,20 +1066,30 @@
                 activePublicKey = account.publicKey;
                 activePrivateKey = pk;
                 
-                document.getElementById('status').innerText = '接続済み: ' + activeAddress.substring(0, 10) + '...';
-                document.getElementById('user-address-short').innerText = activeAddress;
-                document.getElementById('user-avatar').innerText = activeAddress[0];
-                userDashboard.classList.remove('hidden');
-                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                document.getElementById('connect-prompt').classList.add('hidden');
+                // UI更新 (存在確認を追加)
+                const statusEl = document.getElementById('status');
+                if (statusEl) statusEl.innerText = '接続済み: ' + activeAddress.substring(0, 10) + '...';
+                
+                const addressEl = document.getElementById('user-address-short');
+                if (addressEl) addressEl.innerText = activeAddress;
+                
+                const avatarEl = document.getElementById('user-avatar');
+                if (avatarEl) avatarEl.innerText = activeAddress[0];
+                
+                if (userDashboard) userDashboard.classList.remove('hidden');
+                const sellForm = document.getElementById('sell-form');
+                if (sellForm) sellForm.classList.remove('opacity-40', 'pointer-events-none');
+                const prompt = document.getElementById('connect-prompt');
+                if (prompt) prompt.classList.add('hidden');
                 
                 showToast('接続成功: 秘密鍵モード');
                 log(`直接接続完了: ${activeAddress}`, 'success');
+                
                 updateBalance();
                 renderProducts();
             } catch (e) {
                 console.error("接続エラー:", e);
-                alert('接続失敗: 秘密鍵を確認してください。');
+                alert('接続失敗: 秘密鍵を確認してください。詳細: ' + e.message);
             }
         }
 
