@@ -97,7 +97,8 @@ const PINATA_JWT = process.env.PINATA_JWT || '';
  */
 async function uploadToPinata(filePath, fileName) {
     if (!PINATA_API_KEY || !PINATA_SECRET_API_KEY) {
-        console.warn("Pinata APIキーが設定されていないため、ローカル保存のみ行います。");
+        console.warn("[WARN] Pinata APIキーが設定されていないため、ローカル保存のみ行います。");
+        console.log(`[DEBUG] PINATA_API_KEY present: ${!!PINATA_API_KEY}, PINATA_SECRET_API_KEY present: ${!!PINATA_SECRET_API_KEY}`);
         return null;
     }
 
@@ -120,6 +121,7 @@ async function uploadToPinata(filePath, fileName) {
 
         if (response.ok) {
             const result = await response.json();
+            console.log(`[DEBUG] Pinata upload successful. IPFS Hash: ${result.IpfsHash}`);
             return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
         } else {
             const errorText = await response.text();
@@ -483,9 +485,12 @@ app.get('/api/products/:id/download', (req, res) => {
         }
 
         const secretStr = product.secret.replace('URL: ', '');
+        console.log(`[DEBUG - /api/products/:id/download] secretStr: ${secretStr}`);
         if (secretStr.startsWith('http')) {
             const filename = path.basename(secretStr);
             const filePath = path.join(uploadDir, filename);
+            console.log(`[DEBUG - /api/products/:id/download] Constructed filePath: ${filePath}`);
+            console.log(`[DEBUG - /api/products/:id/download] File exists at filePath: ${fs.existsSync(filePath)}`);
             
             if (fs.existsSync(filePath)) {
                 res.download(filePath, product.fileName || filename);
@@ -540,11 +545,15 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
         
         if (ipfsUrl) {
             console.log(`[SUCCESS] IPFS Upload: ${ipfsUrl}`);
+        } else {
+            console.log(`[INFO] IPFS Upload skipped or failed, falling back to local storage.`);
         }
 
         const protocol = req.protocol;
         const host = req.get('host');
         const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
+
+        console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, using IPFS: ${!!ipfsUrl}`);
 
         const products = getProducts();
         const newProduct = {
