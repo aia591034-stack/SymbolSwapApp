@@ -6,11 +6,25 @@ import { createClient } from '@vercel/kv';
 const kvUrl = process.env.KV_URL;
 const kvToken = process.env.KV_REST_API_TOKEN;
 
-// rediss:// スキームを https:// に変換する（Vercel KVの要件に合わせる）
-const sanitizedKvUrl = kvUrl ? kvUrl.replace(/^rediss:\/\//, "https://") : undefined;
+let cleanedKvUrl = undefined;
+if (kvUrl) {
+    try {
+        const url = new URL(kvUrl);
+        // 認証情報を削除
+        url.username = "";
+        url.password = "";
+        // スキームを https に変更
+        url.protocol = "https:";
+        cleanedKvUrl = url.toString();
+    } catch (e) {
+        console.error("Error parsing KV_URL:", e);
+        // URLパースエラーのフォールバックとして、rediss?:// を https:// に置換
+        cleanedKvUrl = kvUrl.replace(/^rediss?:\/\//, "https://");
+    }
+}
 
 const kv = createClient({
-    url: sanitizedKvUrl,
+    url: cleanedKvUrl,
     token: kvToken,
 });
 import path from 'path';
