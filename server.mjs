@@ -487,18 +487,13 @@ app.get('/api/products/:id/download', (req, res) => {
         const secretStr = product.secret.replace('URL: ', '');
         console.log(`[DEBUG - /api/products/:id/download] secretStr: ${secretStr}`);
         if (secretStr.startsWith('http')) {
-            const filename = path.basename(secretStr);
-            const filePath = path.join(uploadDir, filename);
-            console.log(`[DEBUG - /api/products/:id/download] Constructed filePath: ${filePath}`);
-            console.log(`[DEBUG - /api/products/:id/download] File exists at filePath: ${fs.existsSync(filePath)}`);
-            
-            if (fs.existsSync(filePath)) {
-                res.download(filePath, product.fileName || filename);
-            } else {
-                res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
-            }
+            // Pinata (IPFS) のURLの場合は直接リダイレクトする
+            console.log(`[INFO] Redirecting to IPFS gateway: ${secretStr}`);
+            res.redirect(secretStr);
         } else {
-            res.json({ message: "外部URLのため、直接ブラウザで開いてください", url: secretStr });
+            // Pinata URLではない場合、ファイルが見つからないというエラーを返す
+            console.log(`[WARN] Non-IPFS URL or local path attempted for download: ${secretStr}`);
+            res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
