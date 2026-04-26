@@ -506,23 +506,27 @@ app.get('/api/config', (req, res) => {
     }
 });
 
-app.post('/api/products', upload.single('file'), async (req, res) => {
+app.post("/api/products", upload.fields([
+    { name: "mainFile", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 }
+]), async (req, res) => {
     try {
         console.log(`[POST] /api/products started. Body:`, JSON.stringify(req.body));
-        const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl, saleType, mosaicId } = req.body;
-        const file = req.file;
+        const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl: bodyImageUrl, saleType, mosaicId } = req.body;
+        const mainFile = req.files && req.files.file ? req.files.file[0] : null;
+        const thumbnailFile = req.files && req.files.thumbnail ? req.files.thumbnail[0] : null;
         
-        if (!file) {
-            console.error("[400] Registration failed: req.file is undefined. Check multipart/form-data config.");
-            return res.status(400).json({ error: "ファイルがありません。商品には必ずデジタルファイルの添付が必要です。" });
+        if (!mainFile) {
+            console.error("[400] Registration failed: Main file is missing. Check multipart/form-data config.");
+            return res.status(400).json({ error: "メインファイルがありません。商品には必ずデジタルファイルの添付が必要です。" });
         }
 
-        console.log(`[INFO] Received file: ${file.originalname}, Size: ${file.size}, Path: ${file.path}`);
+        console.log(`[INFO] Received main file: ${mainFile.originalname}, Size: ${mainFile.size}, Path: ${mainFile.path}`);
 
         // IPFS にアップロードを試みる
         let ipfsUrl = null;
         try {
-            ipfsUrl = await uploadToPinata(file.path, file.originalname);
+            ipfsUrl = await uploadToPinata(mainFile.path, mainFile.originalname);
         } catch (pinataErr) {
             console.error(`[ERROR] uploadToPinata failed:`, pinataErr);
         }
@@ -535,7 +539,7 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 
         const protocol = req.protocol;
         const host = req.get('host');
-        const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
+        const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${mainFile.mainFilename}`;
 
         console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, using IPFS: ${!!ipfsUrl}`);
 
@@ -548,9 +552,9 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             sellerAddress,
             sellerPublicKey,
             description: description || "",
-            imageUrl: imageUrl || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop&q=60",
-            fileName: file.originalname,
-            saleType: saleType || "file",
+            imageUrl: imageUrl || "/placeholder.png",
+            mainFileName: mainFile.originalname,
+            saleType: saleType || "mainFile",
             mosaicId: mosaicId || null,
             secret: `URL: ${secretUrl}`
         };
