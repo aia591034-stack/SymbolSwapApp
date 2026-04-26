@@ -5,7 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AETHER MARKET - 次世代デジタルアセット・ハブ</title>
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdnjs.cloudflare.com https://xembook.github.io; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https://images.unsplash.com https://i.pravatar.cc https://gateway.pinata.cloud; connect-src 'self' https://sym-test-01.opening-line.jp:3001 https://api.pinata.cloud wss://sym-test-01.opening-line.jp; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; object-src 'none'; media-src 'self' blob:; worker-src 'self' blob:;">
     <!-- Tailwind CSS for Professional UI -->
+    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -23,6 +26,13 @@
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap');
+
+        /* セレクトボックスの選択肢（option）の視認性向上 */
+        select option {
+            background-color: #1a1a1a;
+            color: white;
+            padding: 10px;
+        }
 
         :root {
             --accent: #6366f1;
@@ -247,10 +257,27 @@
             </h2>
             <p id="swap-status-desc" class="text-slate-400 text-xs md:text-sm font-medium leading-relaxed">
                 ブロックチェーン上で資産の交換を検証しています...</p>
+
+            <!-- Mobile Action Area -->
+            <div id="direct-manual-msg" class="hidden mt-8 text-center space-y-4 animate-in zoom-in duration-500">
+                <div class="bg-amber-500/10 p-6 rounded-[2rem] border border-amber-500/20 w-full">
+                    <p class="text-[10px] text-amber-400 font-black mb-4 uppercase tracking-widest">
+                        【モバイル・署名待機中】</p>
+                    <p class="text-[9px] text-slate-400 leading-relaxed font-medium">
+                        「直接モード（秘密鍵）」で連携している場合は、バックグラウンドで処理が進行します。
+                        しばらくお待ちください。
+                    </p>
+                </div>
+            </div>
         </div>
         <div class="mt-12 w-48 md:w-64 bg-white/5 h-1 rounded-full overflow-hidden">
             <div id="swap-progress-bar" class="h-full bg-indigo-500 w-0 transition-all duration-500"></div>
         </div>
+        <!-- 閉じるボタンを追加 -->
+        <button onclick="hideSwapOverlay(true)"
+            class="mt-8 px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white/5">
+            オーバーレイを閉じてログを確認
+        </button>
     </div>
 
     <!-- Navigation -->
@@ -267,9 +294,9 @@
 
             <div class="flex items-center space-x-2 md:space-x-6">
                 <div id="balance-display"
-                    class="hidden sm:flex items-center space-x-2 md:space-x-3 px-3 md:px-5 py-2 md:py-2.5 bg-white/5 rounded-xl md:rounded-2xl border border-white/5">
+                    class="hidden flex items-center space-x-2 md:space-x-3 px-3 md:px-5 py-2 md:py-2.5 bg-white/5 rounded-xl md:rounded-2xl border border-white/5">
                     <span
-                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden md:inline">Balance</span>
+                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden xs:inline">残高</span>
                     <span id="xym-balance" class="text-xs md:text-sm font-bold">0.00</span>
                     <span class="text-[8px] md:text-[10px] font-black text-slate-500">XYM</span>
                 </div>
@@ -290,14 +317,20 @@
                 <div id="wallet-status" class="flex items-center space-x-2 md:space-x-3">
                     <span id="admin-badge"
                         class="hidden bg-red-500/10 text-red-500 border border-red-500/20 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase">
-                        ADMIN
+                        管理者
                     </span>
-                    <button id="connectSssBtn"
-                        class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
-                        <i class="fas fa-wallet"></i>
-                        <span class="hidden xs:inline">CONNECT WALLET</span>
-                        <span class="xs:hidden">CONNECT</span>
-                    </button>
+                    <div class="flex items-center">
+                        <button id="connectSssBtn"
+                            class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
+                            <i class="fas fa-wallet"></i>
+                            <span class="hidden xs:inline">ウォレットを連携</span>
+                            <span class="xs:hidden">連携</span>
+                        </button>
+                        <button id="logoutBtn" onclick="disconnect()" title="ログアウト"
+                            class="hidden ml-2 w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -420,16 +453,16 @@
                                 ?
                             </div>
                             <div>
-                                <h3 class="font-black text-base md:text-lg leading-none mb-2 text-white">Authenticated
+                                <h3 class="font-black text-base md:text-lg leading-none mb-2 text-white">認証済み
                                 </h3>
                                 <p id="user-address-short"
                                     class="text-[8px] md:text-[10px] font-black text-slate-500 tracking-widest uppercase truncate w-24 md:w-32">
-                                    Not Connected
+                                    未接続
                                 </p>
                             </div>
                         </div>
                         <button onclick="location.reload()"
-                            class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 hover:text-indigo-400 transition-all border border-white/5">
+                            class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 hover:text-indigo-400 transition-all border border-white/5 shadow-sm">
                             <i class="fas fa-power-off text-sm md:text-base"></i>
                         </button>
                     </div>
@@ -600,30 +633,28 @@
                     class="w-10 h-10 md:w-12 md:h-12 bg-indigo-600 rounded-xl md:rounded-2xl flex items-center justify-center text-white">
                     <i class="fas fa-edit text-sm md:text-base"></i>
                 </div>
-                <h2 class="text-2xl md:text-3xl font-black tracking-tighter uppercase text-white">Modify Asset</h2>
+                <h2 class="text-2xl md:text-3xl font-black tracking-tighter uppercase text-white">商品を編集する</h2>
             </div>
             <input type="hidden" id="edit-id">
             <div class="space-y-8 md:space-y-10">
                 <div class="space-y-3">
                     <label
-                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">Asset
-                        Identity</label>
+                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">アセット名</label>
                     <input type="text" id="edit-title"
                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-black tracking-widest uppercase text-[10px] text-white">
                 </div>
                 <div class="space-y-3">
                     <label
-                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">Valuation
+                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">価格
                         (XYM)</label>
                     <input type="number" id="edit-price"
                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-black text-2xl md:text-3xl text-indigo-500">
                 </div>
                 <div class="flex space-x-4 md:space-x-6 pt-4">
                     <button id="cancel-edit"
-                        class="flex-1 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[10px] tracking-widest uppercase hover:bg-white/10 transition-all">Discard</button>
+                        class="flex-1 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[10px] tracking-widest uppercase hover:bg-white/10 transition-all">破棄する</button>
                     <button id="save-edit"
-                        class="flex-1 btn-primary py-4 md:py-5 rounded-xl md:rounded-2xl text-white font-black text-[10px] tracking-widest uppercase shadow-lg shadow-indigo-500/20">Commit
-                        Changes</button>
+                        class="flex-1 btn-primary py-4 md:py-5 rounded-xl md:rounded-2xl text-white font-black text-[10px] tracking-widest uppercase shadow-lg shadow-indigo-500/20">変更を保存</button>
                 </div>
             </div>
         </div>
@@ -658,7 +689,92 @@
         </div>
     </div>
 
+    <!-- Wallet Connect Modal -->
+    <div id="connectModal"
+        class="fixed inset-0 z-[160] hidden flex items-center justify-center p-4 md:p-6 bg-black/90 backdrop-blur-3xl">
+        <div class="glass-card w-full max-w-lg rounded-[2rem] md:rounded-[3rem] p-8 md:p-12 shadow-2xl border-white/10">
+            <div class="text-center mb-8">
+                <div
+                    class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-lg shadow-indigo-500/20">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <h2 class="text-2xl font-black tracking-tighter text-white uppercase">Link Wallet</h2>
+                <p class="text-[10px] text-slate-500 font-medium mt-2">ウォレットと連携して取引を開始します</p>
+            </div>
+            <div class="space-y-6">
+                <!-- PC Options (Hidden on Mobile) -->
+                <div id="sss-option" class="space-y-4 hidden md:block">
+                    <button id="sss-connect-btn"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 transition-all border-2 border-white/10">
+                        <i class="fas fa-fingerprint text-lg"></i>
+                        <span>SSS で連携 (PC)</span>
+                    </button>
+                    <p class="text-[8px] text-slate-500 text-center uppercase tracking-widest">Chrome 拡張機能が必要です</p>
+
+                    <div class="relative py-4 flex items-center">
+                        <div class="flex-grow border-t border-white/10"></div>
+                        <span
+                            class="flex-shrink mx-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">または</span>
+                        <div class="flex-grow border-t border-white/10"></div>
+                    </div>
+                </div>
+
+                <!-- Direct Mode / Mobile Option -->
+                <div class="bg-amber-500/5 p-6 rounded-[2rem] border border-amber-500/20 space-y-4">
+                    <div class="flex flex-col items-center space-y-3">
+                        <p class="text-[10px] text-amber-500 font-black uppercase tracking-widest">直接モード (秘密鍵でサイン)
+                        </p>
+                        <p class="text-[9px] text-slate-400 text-center leading-relaxed">
+                            秘密鍵を入力して連携します。スマホでも確実に動作します。
+                        </p>
+                    </div>
+
+                    <div id="direct-mode-input" class="space-y-4 mt-4">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">秘密鍵
+                                (64文字)</label>
+                            <div class="relative">
+                                <input type="password" id="direct-private-key" placeholder="PRIVATE KEY (64 CHARS)"
+                                    oninput="previewAddress(this.value)"
+                                    class="w-full px-5 py-4 rounded-xl bg-black/20 border border-white/10 focus:ring-1 focus:ring-amber-500 outline-none transition-all font-bold text-[10px] text-white pr-12">
+                                <button onclick="togglePkVisibility()"
+                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-all">
+                                    <i id="pk-eye-icon" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Address Preview -->
+                        <div id="address-preview-container"
+                            class="hidden bg-white/5 p-4 rounded-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <p class="text-[8px] text-amber-500 font-black uppercase tracking-widest mb-1">導出されるアドレス
+                            </p>
+                            <p id="preview-address-val" class="text-[10px] font-bold text-white break-all font-mono">
+                            </p>
+                        </div>
+
+                        <button id="confirm-direct-link" onclick="connectDirectMode()"
+                            class="w-full bg-amber-600 hover:bg-amber-500 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-amber-600/20 active:scale-95 transition-all">
+                            連携を確定する
+                        </button>
+                        <p class="text-[7px] text-slate-500 leading-relaxed text-center italic">
+                            ※ 秘密鍵は署名にのみ使用され、サーバーには送信されません。
+                        </p>
+                    </div>
+                </div>
+
+                <button onclick="closeConnectModal()"
+                    class="w-full py-4 text-slate-500 font-black text-[9px] uppercase tracking-widest hover:text-white transition-all">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://xembook.github.io/nem2-browserify/symbol-sdk-2.0.4.js"></script>
+    <!-- SDK v3はESM形式のため、通常のscriptタグではimport.metaエラーが出るため一時停止 -->
+    <!-- <script src="/lib/symbol-sdk-v3.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
         // AOS Initialize
         AOS.init({
@@ -667,7 +783,16 @@
             easing: 'ease-out-cubic'
         });
 
+        // グローバルエラーハンドラ
+        window.onerror = function (message, source, lineno, colno, error) {
+            log(`[GLOBAL ERROR] ${message} at ${source}:${lineno}`, 'error');
+            return false;
+        };
+        window.onunhandledrejection = function (event) {
+            log(`[PROMISE ERROR] ${event.reason}`, 'error');
+        };
 
+        const symbol = require("/node_modules/symbol-sdk");
         const logContainer = document.getElementById('log-container');
         const toast = document.getElementById('toast');
         const toastMsg = document.getElementById('toast-msg');
@@ -683,96 +808,202 @@
         const swapDesc = document.getElementById('swap-status-desc');
         const guideModal = document.getElementById('guideModal');
         const guideContent = document.getElementById('guide-content');
+        const connectModal = document.getElementById('connectModal');
 
         let activeAddress = null;
         let activePublicKey = null;
+        let directPrivateKey = null; // 直接モード用
         let operatorAddress = null;
         let currentFilter = 'all';
         let allProducts = [];
+        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const networkType = symbol.NetworkType.TEST_NET;
+
+        // Connection Modal Control
+        function openConnectModal() {
+            connectModal.classList.remove('hidden');
+        }
+        function closeConnectModal() {
+            connectModal.classList.add('hidden');
+        }
+
+        function disconnect() {
+            if (confirm('ログアウトしますか？（保存された秘密鍵は削除されます）')) {
+                localStorage.removeItem('direct_private_key');
+                location.reload();
+            }
+        }
+
+        function togglePkVisibility() {
+            const pkInput = document.getElementById('direct-private-key');
+            const eyeIcon = document.getElementById('pk-eye-icon');
+            if (pkInput.type === 'password') {
+                pkInput.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                pkInput.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        function previewAddress(pk) {
+            const previewContainer = document.getElementById('address-preview-container');
+            const previewVal = document.getElementById('preview-address-val');
+
+            const cleanPk = pk.trim();
+            if (cleanPk.length === 64) {
+                try {
+                    const account = symbol.Account.createFromPrivateKey(cleanPk, networkType);
+                    previewVal.innerText = account.address.plain();
+                    previewContainer.classList.remove('hidden');
+                } catch (e) {
+                    previewContainer.classList.add('hidden');
+                }
+            } else {
+                previewContainer.classList.add('hidden');
+            }
+        }
+
+        function connectDirectMode() {
+            const pk = document.getElementById('direct-private-key').value.trim();
+            if (pk.length !== 64) return showToast('秘密鍵は64文字で入力してください');
+
+            log('Authenticating with Private Key...', 'info');
+            try {
+                const account = symbol.Account.createFromPrivateKey(pk, networkType);
+                activeAddress = account.address.plain();
+                activePublicKey = account.publicKey;
+                directPrivateKey = pk;
+
+                localStorage.setItem('direct_private_key', pk);
+
+                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-bolt mr-2 text-amber-400"></i>${shortAddr}`;
+                document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                document.getElementById('logoutBtn').classList.remove('hidden');
+
+                document.getElementById('user-address-short').innerText = activeAddress;
+                document.getElementById('user-avatar').innerText = activeAddress[0];
+                userDashboard.classList.remove('hidden');
+                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('connect-prompt').classList.add('hidden');
+
+                log(`Authentication Success: ${activeAddress}`, 'success');
+                showToast('認証に成功しました');
+                closeConnectModal();
+                updateBalance();
+                renderProducts();
+            } catch (e) {
+                log(`Authentication Failed: ${e.message}`, 'error');
+                showToast('秘密鍵が正しくありません');
+            }
+        }
+
+        // 自動再接続
+        window.addEventListener('DOMContentLoaded', () => {
+            checkInAppBrowser();
+
+            // 保存されたデータの読み込み
+            const savedDirectPK = localStorage.getItem('direct_private_key');
+
+            if (savedDirectPK) {
+                document.getElementById('direct-private-key').value = savedDirectPK;
+                connectDirectMode();
+            }
+        });
 
         // Guide Modal Logic
         function openGuide(type) {
             let html = '';
             if (type === 'platform') {
                 html = `
-                    <div class="space-y-8 md:space-y-12">
-                        <div class="text-center">
-                            <h2 class="text-2xl md:text-4xl font-black tracking-tighter gradient-text mb-2 md:mb-4">AETHER MARKET GUIDE</h2>
-                            <p class="text-[10px] md:text-sm text-slate-400 font-medium">信頼不要のデジタル資産取引プラットフォーム</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-indigo-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-indigo-400">
-                                    <i class="fas fa-shield-alt text-lg md:text-xl"></i>
+                            <div class="space-y-8 md:space-y-12">
+                                <div class="text-center">
+                                    <h2 class="text-2xl md:text-4xl font-black tracking-tighter gradient-text mb-2 md:mb-4">AETHER MARKET GUIDE</h2>
+                                    <p class="text-[10px] md:text-sm text-slate-400 font-medium">信頼不要のデジタル資産取引プラットフォーム</p>
                                 </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">アトミックスワップ</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">代金の支払いと商品の受け取りを、ブロックチェーン上で同時に実行します。どちらか一方が行われない限り、取引は成立しません。</p>
-                            </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-purple-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-purple-400">
-                                    <i class="fas fa-lock text-lg md:text-xl"></i>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+                                    <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
+                                        <div class="w-10 h-10 md:w-12 md:h-12 bg-indigo-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-indigo-400">
+                                            <i class="fas fa-shield-alt text-lg md:text-xl"></i>
+                                        </div>
+                                        <h3 class="font-black text-white uppercase tracking-widest text-xs">アトミックスワップ</h3>
+                                        <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">代金の支払いと商品の受け取りを、ブロックチェーン上で同時に実行します。どちらか一方が行われない限り、取引は成立しません。</p>
+                                    </div>
+                                    <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
+                                        <div class="w-10 h-10 md:w-12 md:h-12 bg-purple-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-purple-400">
+                                            <i class="fas fa-lock text-lg md:text-xl"></i>
+                                        </div>
+                                        <h3 class="font-black text-white uppercase tracking-widest text-xs">セキュアなデータ管理</h3>
+                                        <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">購入したファイルは、あなたのウォレットアドレスで認証された場合のみダウンロード可能です。外部からの直接アクセスは遮断されています。</p>
+                                    </div>
+                                    <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
+                                        <div class="w-10 h-10 md:w-12 md:h-12 bg-pink-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-pink-400">
+                                            <i class="fas fa-rocket text-lg md:text-xl"></i>
+                                        </div>
+                                        <h3 class="font-black text-white uppercase tracking-widest text-xs">即時デプロイ</h3>
+                                        <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">デジタルアセットをアップロードし、価格を設定するだけで、即座にグローバルマーケットプレイスへ公開されます。</p>
+                                    </div>
+                                    <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
+                                        <div class="w-10 h-10 md:w-12 md:h-12 bg-emerald-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-emerald-400">
+                                            <i class="fas fa-sync-alt text-lg md:text-xl"></i>
+                                        </div>
+                                        <h3 class="font-black text-white uppercase tracking-widest text-xs">リアルタイム進捗</h3>
+                                        <p class="text-[10px] md:text-[10px] text-slate-500 leading-relaxed">取引の各ステップ（署名、アナウンス、承認）は、専用のオーバーレイによってリアルタイムで可視化されます。</p>
+                                    </div>
+                                    <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
+                                        <div class="w-10 h-10 md:w-12 md:h-12 bg-orange-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-orange-400">
+                                            <i class="fas fa-mobile-alt text-lg md:text-xl"></i>
+                                        </div>
+                                        <h3 class="font-black text-white uppercase tracking-widest text-xs">モバイル対応 (直接モード)</h3>
+                                        <p class="text-[10px] md:text-[10px] text-slate-500 leading-relaxed">スマホ環境では「直接モード（秘密鍵）」を利用可能。ブラウザ上で安全に署名し、スムーズに取引を完了できます。</p>
+                                    </div>
                                 </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">セキュアなデータ管理</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">購入したファイルは、あなたのウォレットアドレスで認証された場合のみダウンロード可能です。外部からの直接アクセスは遮断されています。</p>
                             </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-pink-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-pink-400">
-                                    <i class="fas fa-rocket text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">即時デプロイ</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">デジタルアセットをアップロードし、価格を設定するだけで、即座にグローバルマーケットプレイスへ公開されます。</p>
-                            </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-emerald-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-emerald-400">
-                                    <i class="fas fa-sync-alt text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">リアルタイム進捗</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">取引の各ステップ（署名、アナウンス、承認）は、専用のオーバーレイによってリアルタイムで可視化されます。</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                        `;
             } else if (type === 'sss') {
                 html = `
-                    <div class="space-y-8 md:space-y-12">
-                        <div class="text-center">
-                            <h2 class="text-2xl md:text-4xl font-black tracking-tighter text-indigo-400 mb-2 md:mb-4">SSS WALLET GUIDE</h2>
-                            <p class="text-[10px] md:text-sm text-slate-400 font-medium">Symbol Service Sidekick の導入と活用</p>
-                        </div>
-                        
-                        <div class="space-y-4 md:space-y-6">
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">1</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">拡張機能のインストール</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">Chrome ウェブストアから「SSS Extension」を検索してインストールします。</p>
+                            <div class="space-y-8 md:space-y-12">
+                                <div class="text-center">
+                                    <h2 class="text-2xl md:text-4xl font-black tracking-tighter text-indigo-400 mb-2 md:mb-4">SSS WALLET GUIDE</h2>
+                                    <p class="text-[10px] md:text-sm text-slate-400 font-medium">Symbol Service Sidekick の導入と活用</p>
+                                </div>
+                                
+                                <div class="space-y-4 md:space-y-6">
+                                    <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">1</div>
+                                        <div class="space-y-1 md:space-y-2">
+                                            <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">拡張機能のインストール</h4>
+                                            <p class="text-[10px] md:text-xs text-slate-500">Chrome ウェブストアから「SSS Extension」を検索してインストールします。</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">2</div>
+                                        <div class="space-y-1 md:space-y-2">
+                                            <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">アカウントの登録 / インポート</h4>
+                                            <p class="text-[10px] md:text-xs text-slate-500">既存のSymbolアカウント（秘密鍵）をインポートするか、新しく作成します。Testnet用のアカウントを用意してください。</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">3</div>
+                                        <div class="space-y-1 md:space-y-2">
+                                            <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">AETHER MARKET への接続</h4>
+                                            <p class="text-[10px] md:text-xs text-slate-500">右上の「CONNECT WALLET」ボタンをクリック。SSSのポップアップで許可を与えると、マーケットと同期されます。</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">4</div>
+                                        <div class="space-y-1 md:space-y-2">
+                                            <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">安全な署名</h4>
+                                            <p class="text-[10px] md:text-xs text-slate-500">取引の際はSSSが内容を検証し、あなたの承認（署名）を求めます。秘密鍵をサイトに渡すことなく、安全に取引を完了できます。</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">2</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">アカウントの登録 / インポート</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">既存のSymbolアカウント（秘密鍵）をインポートするか、新しく作成します。Testnet用のアカウントを用意してください。</p>
-                                </div>
-                            </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">3</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">AETHER MARKET への接続</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">右上の「CONNECT WALLET」ボタンをクリック。SSSのポップアップで許可を与えると、マーケットと同期されます。</p>
-                                </div>
-                            </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">4</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">安全な署名</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">取引の際はSSSが内容を検証し、あなたの承認（署名）を求めます。秘密鍵をサイトに渡すことなく、安全に取引を完了できます。</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                        `;
             }
             guideContent.innerHTML = html;
             guideModal.classList.remove('hidden');
@@ -780,6 +1011,37 @@
 
         function closeGuide() {
             guideModal.classList.add('hidden');
+        }
+
+        function toggleMosaicInput() {
+            const saleType = document.getElementById('pSaleType').value;
+            const container = document.getElementById('mosaic-id-container');
+            if (saleType === 'nft' || saleType === 'both') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        async function validateMosaic(id) {
+            const msg = document.getElementById('mosaic-valid-msg');
+            if (!id || id.length !== 16) {
+                msg.classList.add('hidden');
+                return;
+            }
+            msg.classList.remove('hidden', 'text-emerald-400', 'text-red-400');
+            msg.innerText = 'VALIDATING MOSAIC...';
+            msg.classList.add('text-slate-500');
+
+            const info = await getMosaicInfo(id);
+            msg.classList.remove('text-slate-500');
+            if (info) {
+                msg.innerText = '✓ MOSAIC DETECTED';
+                msg.classList.add('text-emerald-400');
+            } else {
+                msg.innerText = '✗ MOSAIC NOT FOUND';
+                msg.classList.add('text-red-400');
+            }
         }
 
         // Swap Overlay Control
@@ -790,13 +1052,21 @@
             swapProgressBar.style.width = progress + '%';
         }
 
-        function hideSwapOverlay() {
+        function hideSwapOverlay(force = false) {
+            if (force) {
+                swapOverlay.style.display = 'none';
+                swapOverlay.style.opacity = '1';
+                swapProgressBar.style.width = '0%';
+                document.getElementById('direct-manual-msg').classList.add('hidden');
+                return;
+            }
             setTimeout(() => {
                 swapOverlay.style.opacity = '0';
                 setTimeout(() => {
                     swapOverlay.style.display = 'none';
                     swapOverlay.style.opacity = '1';
                     swapProgressBar.style.width = '0%';
+                    document.getElementById('direct-manual-msg').classList.add('hidden');
                 }, 500);
             }, 2000);
         }
@@ -808,6 +1078,20 @@
             setTimeout(() => {
                 toast.classList.add('translate-y-32', 'opacity-0');
             }, 3000);
+        }
+
+        let currentPayload = null;
+
+        function checkInAppBrowser() {
+            const ua = navigator.userAgent || navigator.vendor || window.opera;
+            const isInApp = /Line|Twitter|Instagram|FBAN|FBAV/i.test(ua);
+            if (isInApp) {
+                showToast('⚠️ アプリ内ブラウザを検知しました');
+                const msg = document.createElement('div');
+                msg.className = 'fixed top-0 left-0 w-full bg-orange-600 text-white text-[10px] font-black p-3 z-[1000] text-center uppercase tracking-widest';
+                msg.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> LINE/Twitter等では動きません。SafariやChromeで開き直してください。';
+                document.body.appendChild(msg);
+            }
         }
 
         function log(msg, type = 'info') {
@@ -828,32 +1112,52 @@
             }
 
             div.innerHTML = `
-                <div class="flex justify-between items-start mb-2 opacity-30 font-black tracking-[0.3em] uppercase">
-                    <span>${type}</span>
-                    <span>${timeStr}</span>
-                </div>
-                <div class="flex items-start space-x-2">
-                    <div class="flex-1">${displayMsg}</div>
-                </div>
-            `;
+                        <div class="flex justify-between items-start mb-2 opacity-30 font-black tracking-[0.3em] uppercase">
+                            <span>${type}</span>
+                            <span>${timeStr}</span>
+                        </div>
+                        <div class="flex items-start space-x-2">
+                            <div class="flex-1">${displayMsg}</div>
+                        </div>
+                    `;
 
             logContainer.prepend(div);
         }
 
         async function updateBalance() {
             if (!activeAddress) return;
+            // アドレスからハイフンを除去して統一
+            const cleanAddress = activeAddress.replace(/-/g, '').toUpperCase();
             try {
-                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${activeAddress}`);
+                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${cleanAddress}`);
                 if (res.ok) {
                     const data = await res.json();
                     const xym = data.account.mosaics.find(m => m.id === '72C0212E67A08BCE');
                     const amount = xym ? (BigInt(xym.amount) / 1000000n) : 0n;
                     xymBalanceEl.innerText = Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
                     balanceDisplay.classList.remove('hidden');
+                    balanceDisplay.classList.add('flex'); // hiddenを消してflexを明示
+                } else {
+                    // アカウントが未アクティブ（残高0）の場合
+                    xymBalanceEl.innerText = '0.00';
+                    balanceDisplay.classList.remove('hidden');
+                    balanceDisplay.classList.add('flex');
                 }
             } catch (e) {
                 console.error('Balance update error:', e);
             }
+        }
+
+        async function getMosaicInfo(mosaicId) {
+            try {
+                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/mosaics/${mosaicId}`);
+                if (res.ok) {
+                    return await res.json();
+                }
+            } catch (e) {
+                console.error('Mosaic info fetch error:', e);
+            }
+            return null;
         }
 
         // Search & Filter
@@ -892,7 +1196,7 @@
             if (activeAddress) {
                 const myItemsCount = allProducts.filter(p => p.sellerAddress === activeAddress).length;
                 document.getElementById('my-items-count').innerText = myItemsCount;
-                const purchasedCount = allProducts.filter(p => p.isPurchased).length;
+                const purchasedCount = Object.keys(localStorage).filter(k => k.startsWith('purchased_')).length;
                 document.getElementById('purchased-count').innerText = purchasedCount;
             }
 
@@ -910,49 +1214,50 @@
                     card.setAttribute('data-aos-delay', (idx % 4) * 100);
 
                     card.innerHTML = `
-                        <div class="relative h-48 md:h-64 overflow-hidden">
-                            <img src="${p.imageUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000">
-                            <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
-                            
-                            <div class="absolute top-4 md:top-6 right-4 md:right-6 px-3 md:px-5 py-1.5 md:py-2.5 glass rounded-xl md:rounded-2xl shadow-2xl border-white/10">
-                                <span class="text-xs md:text-sm font-black text-white">${p.price}</span>
-                                <span class="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase ml-1">XYM</span>
-                            </div>
+                                <div class="relative h-48 md:h-64 overflow-hidden">
+                                    <img src="${p.imageUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
+                                    
+                                    <div class="absolute top-4 md:top-6 right-4 md:right-6 px-3 md:px-5 py-1.5 md:py-2.5 glass rounded-xl md:rounded-2xl shadow-2xl border-white/10">
+                                        <span class="text-xs md:text-sm font-black text-white">${p.price}</span>
+                                        <span class="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase ml-1">XYM</span>
+                                    </div>
 
-                            <div class="absolute bottom-4 md:bottom-6 left-6 md:left-8 right-6 md:right-8">
-                                <div class="flex items-center space-x-2 md:space-x-3 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2 md:mb-3">
-                                    <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'OWNED BY YOU' : (p.isPurchased ? 'PURCHASED' : 'AVAILABLE')}</span>
-                                    <span class="text-white/40">•</span>
-                                    <span class="text-white/60">${p.fileName ? p.fileName.split('.').pop().toUpperCase() : 'ASSET'}</span>
+                                    <div class="absolute bottom-4 md:bottom-6 left-6 md:left-8 right-6 md:right-8">
+                                        <div class="flex items-center space-x-2 md:space-x-3 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2 md:mb-3">
+                                            <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'あなたが所有' : '購入可能'}</span>
+                                            <span class="text-white/40">•</span>
+                                            <span class="text-white/60">${p.saleType === 'nft' ? 'NFT' : (p.saleType === 'both' ? 'ファイル + NFT' : 'デジタルファイル')}</span>
+                                            ${p.mosaicId ? `<span class="text-white/40">•</span><span class="text-indigo-400">ID: ${p.mosaicId}</span>` : ''}
+                                        </div>
+                                        <h3 class="text-xl md:text-2xl font-black text-white tracking-tighter truncate">${p.title}</h3>
+                                    </div>
                                 </div>
-                                <h3 class="text-xl md:text-2xl font-black text-white tracking-tighter truncate">${p.title}</h3>
-                            </div>
-                        </div>
-                        <div class="p-6 md:p-10 space-y-6 md:space-y-10">
-                            <p class="text-[10px] md:text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 h-8 md:h-10">
-                                ${p.description || "No description provided for this digital asset."}
-                            </p>
-                            ${isOwner ? `
-                            <div class="flex space-x-2 md:space-x-3">
-                                <button onclick='event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
-                                    MODIFY
-                                </button>
-                                <button onclick='event.stopPropagation(); deleteProduct(${p.id})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 transition-all border border-white/5 shadow-sm">
-                                    DELETE
-                                </button>
-                            </div>
-                            ` : `
-                            <button id="buy-${p.id}" class="btn-primary w-full py-4 md:py-5 rounded-xl md:rounded-2xl text-white font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all flex items-center justify-center group/btn shadow-xl shadow-indigo-500/10">
-                                <span>EXECUTE SWAP</span>
-                                <i class="fas fa-chevron-right ml-3 md:ml-4 text-[8px] opacity-40 group-hover/btn:translate-x-1 transition-all"></i>
-                            </button>
-                            `}
-                        </div>
-                    `;
+                                <div class="p-6 md:p-10 space-y-6 md:space-y-10">
+                                    <p class="text-[10px] md:text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 h-8 md:h-10">
+                                        ${p.description || "No description provided for this digital asset."}
+                                    </p>
+                                    ${isOwner ? `
+                                    <div class="flex space-x-2 md:space-x-3">
+                                        <button onclick=\'event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/\'/g, "'")})\' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
+                                            MODIFY
+                                        </button>
+                                        <button onclick=\'event.stopPropagation(); deleteProduct(${p.id})\' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 transition-all border border-white/5 shadow-sm">
+                                            DELETE
+                                        </button>
+                                    </div>
+                                    ` : `
+                                    <button id="buy-${p.id}" class="btn-primary w-full py-4 md:py-5 rounded-xl md:rounded-2xl text-white font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all flex items-center justify-center group/btn shadow-xl shadow-indigo-500/10">
+                                        <span>EXECUTE SWAP</span>
+                                        <i class="fas fa-chevron-right ml-3 md:ml-4 text-[8px] opacity-40 group-hover/btn:translate-x-1 transition-all"></i>
+                                    </button>
+                                    `}
+                                </div>
+                            `;
                     list.appendChild(card);
 
                     // Check if already purchased
-                    if (p.isPurchased) {
+                    if (localStorage.getItem(`purchased_${p.id}`)) {
                         const btn = document.getElementById(`buy-${p.id}`);
                         if (btn) {
                             btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-3 text-lg"></i>RETRIEVE ASSET';
@@ -978,12 +1283,10 @@
             try {
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
-                const networkType = symbol.NetworkType.TEST_NET;
                 const operatorAccount = symbol.PublicAccount.createFromPublicKey(config.operatorPublicKey, networkType);
                 operatorAddress = operatorAccount.address.plain();
 
-                const url = activeAddress ? `/api/products?address=${activeAddress}` : '/api/products';
-                const res = await fetch(url);
+                const res = await fetch('/api/products');
                 allProducts = await res.json();
                 renderProducts();
             } catch (e) {
@@ -1043,50 +1346,62 @@
         }
 
         // Wallet Logic
-        // Wallet Logic
-        document.getElementById('connectSssBtn').onclick = async () => {
+        document.getElementById('connectSssBtn').onclick = () => openConnectModal();
+
+        document.getElementById('sss-connect-btn').onclick = async () => {
             log('Scanning for SSS Identity...');
+            log('--- SSS Connection Debug ---');
+            log('SSS Object found:', window.SSS);
+            log('window.SSS exists:', !!window.SSS);
+
             let retry = 0;
             const check = setInterval(() => {
-                (async () => { // IIFE でラップして await エラーを回避
-                    if (window.SSS) {
-                        clearInterval(check);
-                        activeAddress = window.SSS.activeAddress;
-                        activePublicKey = window.SSS.activePublicKey;
+                log(`Connection attempt ${retry + 1}... window.SSS:`, !!window.SSS);
 
-                        if (!activeAddress) {
-                            log('Please unlock SSS extension', 'error');
-                            return;
-                        }
+                if (window.SSS) {
+                    clearInterval(check);
+                    log('SSS Object found:', window.SSS);
+                    log('SSS ActiveAddress:', window.SSS.activeAddress);
+                    log(`SSS ActivePublicKey: ${window.SSS.activePublicKey}`);
 
-                        const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                        document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
-                        document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                    activeAddress = window.SSS.activeAddress;
+                    activePublicKey = window.SSS.activePublicKey;
 
-                        document.getElementById('user-address-short').innerText = activeAddress;
-                        document.getElementById('user-avatar').innerText = activeAddress[0];
-                        userDashboard.classList.remove('hidden');
-
-                        document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                        document.getElementById('connect-prompt').classList.add('hidden');
-
-                        if (activeAddress === operatorAddress) {
-                            document.getElementById('admin-badge').classList.remove('hidden');
-                            log('Privileged Access Granted', 'success');
-                        }
-
-                        log(`Identity linked: ${activeAddress}`, 'success');
-                        showToast('Welcome to the Nexus');
-                        updateBalance();
-                        
-                        // アドレス確定後に商品リストを再読込
-                        await loadProducts();
+                    if (!activeAddress) {
+                        log('SSS is locked or no account linked', 'error');
+                        console.warn('SSS found but activeAddress is null. Is it locked?');
+                        showToast('SSSがロックされているか、アカウントが設定されていません。');
+                        return;
                     }
-                    if (++retry > 10) {
-                        clearInterval(check);
-                        log('SSS Identity Provider not detected', 'error');
+
+                    const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                    document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
+                    document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                    document.getElementById('logoutBtn').classList.remove('hidden');
+
+                    document.getElementById('user-address-short').innerText = activeAddress;
+                    document.getElementById('user-avatar').innerText = activeAddress[0];
+                    userDashboard.classList.remove('hidden');
+
+                    document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                    document.getElementById('connect-prompt').classList.add('hidden');
+
+                    if (activeAddress === operatorAddress) {
+                        document.getElementById('admin-badge').classList.remove('hidden');
+                        log('Privileged Access Granted', 'success');
                     }
-                })();
+
+                    log(`Identity linked: ${activeAddress}`, 'success');
+                    showToast('Welcome to the Nexus');
+                    closeConnectModal();
+                    updateBalance();
+                    renderProducts();
+                }
+                if (++retry > 10) {
+                    clearInterval(check);
+                    log('SSS Identity Provider not detected', 'error');
+                    showToast('SSSが見つかりません。PCで利用してください。');
+                }
             }, 500);
         };
 
@@ -1098,9 +1413,8 @@
 
             log(`Initiating swap protocol: ${p.title}`);
             try {
+                // 1. サーバーでトランザクションを構築 (V2/SDK v3対応)
                 showSwapOverlay('Constructing Tx', 'サーバーでトランザクションを構築中...', 30);
-
-                // 1. サーバーにトランザクション構築を依頼
                 const buildRes = await fetch('/api/build_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1111,107 +1425,287 @@
                     })
                 });
 
-                if (!buildRes.ok) {
-                    const errorData = await buildRes.json();
-                    throw new Error(errorData.error || '構築失敗');
-                }
-
+                if (!buildRes.ok) throw new Error('Failed to build transaction on server');
                 const { payload, hash } = await buildRes.json();
 
-                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
+                // 2. 署名処理
+                let signedTxPayload = null;
+                let txHash = hash;
 
-                // 2. SSSで署名
-                const aggregateTx = symbol.TransactionMapping.createFromPayload(payload);
-                window.SSS.setTransaction(aggregateTx);
-                
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx || !signedTx.payload) {
-                    throw new Error('署名がキャンセルされました');
+                if (directPrivateKey) {
+                    showSwapOverlay('Signing in Browser', 'ブラウザで署名を実行中...', 50);
+                    log('Direct Signing starting...');
+
+                    const buyerAccount = symbol.Account.createFromPrivateKey(directPrivateKey, networkType);
+
+                    // アグリゲートトランザクションへのコサイン署名を作成
+                    // SDK v2 での直接署名処理 (ハッシュに対して署名)
+                    const sigResult = buyerAccount.signData(hash);
+                    const signature = typeof sigResult === 'string' ? sigResult : (sigResult.signature || sigResult);
+                    const buyerPubKey = typeof buyerAccount.publicKey === 'string' ? buyerAccount.publicKey : buyerAccount.publicKey.toString();
+
+                    showSwapOverlay('Finalizing', '署名を結合中...', 70);
+                    const announceRes = await fetch('/api/announce_transaction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            payload: payload,
+                            cosignatures: [{
+                                parentHash: hash,
+                                signature: signature,
+                                signerPublicKey: buyerPubKey
+                            }]
+                        })
+                    });
+
+                    const announceData = await announceRes.json();
+                    if (announceData.success) {
+                        log('Transaction broadcasted via Direct Mode (V2)', 'success');
+                        const finalHash = announceData.hash || hash;
+                        checkStatus(finalHash, activeAddress, p);
+                    } else {
+                        throw new Error(announceData.error + (announceData.details ? `: ${announceData.details}` : ''));
+                    }
+                    return;
                 }
 
-                // 署名（コサイン署名）を抽出
-                const cosignature = {
-                    parentHash: hash,
-                    signature: signedTx.signature,
-                    signerPublicKey: activePublicKey
+                // SSS連携の場合
+                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
+                log('SSS Signing process started');
+
+                // 署名データの抽出（様々なデータ構造に対応）
+                let sig = null;
+                let pubKey = activePublicKey;
+
+                const callSSS = async (method, param, context = window.SSS) => {
+                    log(`[SSS_CALL] Attempting to call SSS method: ${method} with param: ${param ? (typeof param === 'string' ? param.substring(0, 50) + '...' : JSON.stringify(param).substring(0, 50) + '...') : 'none'}`);
+                    try {
+                        const promise = (param !== undefined && param !== null) ? context[method](param) : context[method]();
+                        const result = await Promise.race([
+                            promise,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error(`SSS Timeout (${method})`)), 30000))
+                        ]);
+                        log(`[SSS_CALL] SSS method ${method} returned: ${result ? (typeof result === 'string' ? result.substring(0, 50) + '...' : JSON.stringify(result).substring(0, 50) + '...') : 'no result'}`);
+                        return result;
+                    } catch (e) {
+                        log(`[SSS_CALL_ERROR] Direct error from ${method}: ${e.message}`, 'error');
+                        throw e;
+                    }
                 };
 
-                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+                try {
+                    log('Checking SSS Methods...');
+                    log('--- SSS Client Debug Start ---');
+                    log(`Detecting window.SSS... Is SSS object available? ${!!window.SSS}`);
+                    if (!window.SSS) {
+                        log('Error: window.SSS is not available.', 'error');
+                        throw new Error('window.SSS が見つかりません。拡張機能がインストールされ、有効になっているか確認してください。');
+                    }
+                    log('window.SSS detected. Proceeding with SSS methods check.');
 
-                // 3. アナウンス
-                const announceRes = await fetch('/api/announce_transaction', {
+                    // デバッグ用: SSSのメソッドを列挙
+                    const sssMethods = Object.keys(window.SSS).filter(k => typeof window.SSS[k] === 'function');
+                    const sssAccountMethods = window.SSS.activeAccount ? Object.keys(window.SSS.activeAccount).filter(k => typeof window.SSS.activeAccount[k] === 'function') : [];
+                    log(`Detected SSS Methods: ${sssMethods.join(', ')}`);
+                    log(`Detected SSS Account Methods: ${sssAccountMethods.join(', ')}`);
+
+                    // 戦略1: 標準の requestSignCosignature
+                    if (typeof window.SSS.requestSignCosignature === 'function') {
+                        log('Strategy 1: Attempting requestSignCosignature...');
+                        try {
+                            const result = await callSSS('requestSignCosignature', hash);
+                            if (typeof result === 'string') sig = result;
+                            else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            }
+                        } catch (e) { log(`requestSignCosignature failed: ${e.message}`, 'warn'); }
+                    }
+
+                    // 戦略2: 動的に見つかったメソッド (requestSignCosignatureTransaction など)
+                    if (!sig) {
+                        log('Strategy 2: Attempting dynamic cosign method...');
+                        const foundCosignMethod = sssMethods.find(m => m.toLowerCase().includes('cosignature') && m.toLowerCase().includes('sign'));
+                        if (foundCosignMethod) {
+                            log(`Trying Dynamic Method: ${foundCosignMethod}`);
+                            // パターンC: オブジェクト形式でハッシュを渡す (SSS v2.3.0+ の一部環境)
+                            try {
+                                log(`Attempt C: ${foundCosignMethod}({parentHash: hash})`);
+                                const result = await callSSS(foundCosignMethod, { parentHash: hash });
+                                log('SSS Raw Result (Attempt C):', result);
+                                if (typeof result === 'string') sig = result;
+                                else if (result && result.signature) {
+                                    sig = result.signature;
+                                    pubKey = result.signerPublicKey || pubKey;
+                                }
+                            } catch (e) {
+                                log(`Attempt C failed: ${e.message}`, 'warn');
+
+                                // パターンA: ハッシュを直接渡す
+                                if (!sig) {
+                                    try {
+                                        log(`Attempt A: ${foundCosignMethod}(hash)`);
+                                        const result = await callSSS(foundCosignMethod, hash);
+                                        log('SSS Raw Result (Attempt A):', result);
+                                        if (typeof result === 'string') sig = result;
+                                        else if (result && result.signature) {
+                                            sig = result.signature;
+                                            pubKey = result.signerPublicKey || pubKey;
+                                        }
+                                    } catch (e2) {
+                                        log(`Attempt A failed: ${e2.message}`, 'warn');
+
+                                        // パターンB: Transactionオブジェクトを渡す
+                                        if (!sig && foundCosignMethod.includes('Transaction')) {
+                                            try {
+                                                log(`Attempt B: ${foundCosignMethod}(TransactionObject)`);
+                                                const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                                                const cosignatureTransaction = symbol.CosignatureTransaction.create(aggregateTransaction);
+                                                const result = await callSSS(foundCosignMethod, cosignatureTransaction);
+                                                log('SSS Raw Result (Attempt B):', result);
+                                                if (typeof result === 'string') sig = result;
+                                                else if (result && result.signature) {
+                                                    sig = result.signature;
+                                                    pubKey = result.signerPublicKey || pubKey;
+                                                }
+                                            } catch (e3) { log(`Attempt B failed: ${e3.message}`, 'warn'); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 戦略3: setTransactionByPayload + requestSign (最も原始的で強力な方法)
+                    if (!sig && typeof window.SSS.setTransactionByPayload === 'function') {
+                        log('Strategy 3: Attempting setTransactionByPayload + requestSign...');
+                        try {
+                            log('Trying setTransactionByPayload + requestSign...');
+                            window.SSS.setTransactionByPayload(payload);
+                            const result = await callSSS('requestSign', null);
+                            log('SSS Raw Result (setTransactionByPayload):', result);
+                            if (typeof result === 'string' && result.length > 128) {
+                                sig = result.substring(16, 144);
+                            } else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            } else if (result && result.payload) {
+                                sig = result.payload.substring(16, 144);
+                            }
+                        } catch (e) { log(`setTransactionByPayload failed: ${e.message}`, 'warn'); }
+                    }
+
+                    // 戦略4: 古い SSS の requestSign (Transactionオブジェクト)
+                    if (!sig && typeof window.SSS.requestSign === 'function') {
+                        log('Strategy 4: Attempting legacy requestSign...');
+                        try {
+                            log('Trying legacy requestSign...');
+                            const aggregateTransaction = symbol.TransactionMapping.createFromPayload(payload);
+                            window.SSS.setTransaction(aggregateTransaction);
+                            const result = await callSSS('requestSign', null);
+                            log('SSS Raw Result (legacy requestSign):', result);
+                            if (typeof result === 'string' && result.length > 128) {
+                                sig = result.substring(16, 144);
+                            } else if (result && result.signature) {
+                                sig = result.signature;
+                                pubKey = result.signerPublicKey || pubKey;
+                            }
+                        } catch (e) { log(`Legacy requestSign failed: ${e.message}`, 'warn'); }
+                    }
+
+                    if (!sig) {
+                        throw new Error('すべての署名試行が失敗しました。最新版のSSSを使用するか、確実な「直接モード（秘密鍵）」での購入をお試しください。');
+                    }
+                } catch (signErr) {
+                    console.error('SSS Signing Detailed Error:', signErr);
+                    log(`SSS Signing Error: ${signErr.message || signErr}`, 'error');
+                    throw signErr;
+                }
+
+                if (!sig || sig.length !== 128) {
+                    log(`Invalid signature data obtained. Length: ${sig ? sig.length : 0}`, 'error');
+                    throw new Error(`有効な署名データが取得できませんでした。 (length: ${sig ? sig.length : 0})`);
+                }
+
+                // 公開鍵を確実に 16進数文字列にする
+                if (typeof pubKey !== 'string') {
+                    if (pubKey.hex) pubKey = pubKey.hex();
+                    else if (pubKey.toString) pubKey = pubKey.toString();
+                }
+                log(`Extracted Signature: ${sig}`);
+                log(`Extracted Signer Public Key: ${pubKey}`);
+
+                log('Cosignature obtained successfully');
+                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+                const res = await fetch('/api/announce_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         payload: payload,
-                        cosignatures: [cosignature]
+                        cosignatures: [{
+                            parentHash: hash,
+                            signature: sig,
+                            signerPublicKey: pubKey
+                        }]
                     })
                 });
+                const data = await res.json();
 
-                const announceData = await announceRes.json();
-                if (announceRes.ok && announceData.success) {
+                if (data.success) {
                     log('Transaction broadcasted', 'success');
-                    checkStatus(hash, activeAddress, p);
+                    // サーバーから返された最新のハッシュを使用する
+                    const finalHash = data.hash || hash;
+                    checkStatus(finalHash, activeAddress, p);
                 } else {
-                    throw new Error(announceData.error || '送信失敗');
+                    const errorDetail = data.details ? ` (${data.details})` : '';
+                    throw new Error(`${data.error}${errorDetail}`);
                 }
             } catch (e) {
                 log(e, 'error');
-                showToast(e.message);
                 hideSwapOverlay();
             }
         }
 
-        async function checkStatus(hash, buyerAddress, p) {
+        async function checkStatus(hash, buyerName, p) {
             let retryCount = 0;
             const maxRetries = 20;
 
-            const interval = setInterval(() => {
-                (async () => { // IIFE でラップして await エラーを回避
-                    retryCount++;
-                    showSwapOverlay('Validating', `ネットワークの承認を待機中... (${retryCount}/${maxRetries})`, 80 + (retryCount));
+            const interval = setInterval(async () => {
+                retryCount++;
 
-                    try {
-                        const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
-                        const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
-                        const data = await res.json();
+                try {
+                    const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
+                    const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
+                    const data = await res.json();
 
-                        if (data.group === 'confirmed') {
-                            clearInterval(interval);
-                            
-                            // サーバー側で購入履歴を確定させる
-                            await fetch(`/api/products/${p.id}/purchase_confirm`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    address: buyerAddress,
-                                    transactionHash: hash
-                                })
-                            });
+                    const group = data.group || 'unknown';
+                    showSwapOverlay('Validating', `ネットワークの承認を待機中... (${group}: ${retryCount}/${maxRetries})`, 80 + (retryCount));
 
-                            document.getElementById('node-seller').classList.add('active');
-                            showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
-
-                            log('Swap validated by consensus', 'success');
-                            showToast('Asset unlocked successfully');
-
-                            // 商品情報を再取得して表示を更新
-                            await loadProducts();
-                            hideSwapOverlay();
-                        } else if (data.group === 'failed') {
-                            clearInterval(interval);
-                            showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
-                            log(`Consensus error: ${data.code}`, 'error');
-                            hideSwapOverlay();
-                        }
-                    } catch (e) { /* エラーはログに記録されるため、ここで特別な処理はしない */ }
-
-                    if (retryCount >= maxRetries) {
+                    if (data.group === 'confirmed') {
                         clearInterval(interval);
-                        showSwapOverlay('Timeout', 'ネットワークが混雑しています', 0);
+                        document.getElementById('node-seller').classList.add('active');
+                        showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
+
+                        log('Swap validated by consensus', 'success');
+                        showToast('Asset unlocked successfully');
+
+                        localStorage.setItem(`purchased_${p.id}`, 'true');
+                        updateBalance();
+                        renderProducts();
+                        hideSwapOverlay();
+                    } else if (data.group === 'failed') {
+                        clearInterval(interval);
+                        showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
+                        log(`Consensus error: ${data.code}`, 'error');
                         hideSwapOverlay();
                     }
-                })();
+                } catch (e) { }
+
+                if (++retryCount > maxRetries) {
+                    clearInterval(interval);
+                    showSwapOverlay('Timeout', 'ネットワークが混雑しています', 0);
+                    hideSwapOverlay();
+                }
             }, 5000);
         }
 
@@ -1219,32 +1713,43 @@
             const title = document.getElementById('pTitle').value;
             const price = document.getElementById('pPrice').value;
             const imageUrl = document.getElementById('pImageUrl').value;
+            const saleType = document.getElementById('pSaleType').value;
+            const mosaicId = document.getElementById('pMosaicId').value;
             const fileInput = document.getElementById('pFile');
 
             if (!title || !fileInput.files[0] || !activeAddress) {
                 return showToast('Deployment parameters incomplete');
             }
 
+            if ((saleType === 'nft' || saleType === 'both') && !mosaicId) {
+                return showToast('Mosaic ID is required for NFT sale');
+            }
+
             const formData = new FormData();
             formData.append('title', title);
             formData.append('price', price);
+            formData.append('saleType', saleType);
+            formData.append('mosaicId', mosaicId);
             formData.append('seller', 'Creator');
             formData.append('sellerAddress', activeAddress);
             formData.append('sellerPublicKey', activePublicKey);
             formData.append('imageUrl', imageUrl || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=1200');
             formData.append('file', fileInput.files[0]);
 
-            log('Uploading digital payload...');
+            log('デジタル・ペイロードをアップロード中...', 'info');
             const res = await fetch('/api/products', { method: 'POST', body: formData });
             if (res.ok) {
-                showToast('Asset deployed to Nexus');
+                showToast('アセットをマーケットに出品しました');
                 loadProducts();
                 document.getElementById('pTitle').value = '';
                 document.getElementById('pImageUrl').value = '';
+                document.getElementById('pMosaicId').value = '';
                 document.getElementById('pFile').value = '';
-                document.getElementById('file-name-display').innerText = 'Drop digital file';
+                document.getElementById('file-name-display').innerText = 'ファイルをアップロード';
             } else {
-                log('Deployment failed', 'error');
+                const errData = await res.json();
+                log('出品に失敗しました: ' + (errData.error || '不明なエラー'), 'error');
+                showToast('エラー: ' + (errData.error || '出品に失敗しました'));
             }
         };
 

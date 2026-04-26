@@ -192,10 +192,10 @@ const toBigInt = (val) => {
 app.post('/api/purchase_sss', async (req, res) => {
     try {
         console.log(`[DEBUG - /api/purchase_sss] Received signedPayload: ${req.body.signedPayload ? req.body.signedPayload.substring(0, 100) + '...' : 'null'}`);
-        const { signedPayload } = req.body;
-        if (!signedPayload) {
-            console.error("[ERROR - /api/purchase_sss] Signed payload is missing.");
-            return res.status(400).json({ error: "署名済みデータがありません" });
+        const { signedPayload, productId, buyerPublicKey } = req.body;
+        if (!signedPayload || !productId || !buyerPublicKey) {
+            console.error("[ERROR - /api/purchase_sss] Signed payload, productId or buyerPublicKey is missing.");
+            return res.status(400).json({ error: "署名済みデータ、商品ID、または購入者公開鍵がありません" });
         }
 
         console.log(`[DEBUG - /api/purchase_sss] Sending transaction to node: ${NODE_URL}/transactions`);
@@ -402,76 +402,17 @@ async function getProducts() {
     }
 }
 
-/**
- * 購入履歴を取得する
- */
-async function getPurchasedBy(productId) {
-    try {
-        const key = `purchased_${productId}`;
-        const data = await kv.get(key);
-        return data || [];
-    } catch (error) {
-        console.error("Vercel KV read error (purchasedBy):", error);
-        return [];
-    }
-}
-
-/**
- * 購入履歴を追加する
- */
-async function addPurchaseRecord(productId, address) {
-    try {
-        const key = `purchased_${productId}`;
-        const purchasedBy = await getPurchasedBy(productId);
-        if (!purchasedBy.includes(address)) {
-            purchasedBy.push(address);
-            await kv.set(key, purchasedBy);
-            console.log(`[INFO] Purchase recorded: Product ${productId} by ${address}`);
-        }
-    } catch (error) {
-        console.error("Vercel KV write error (addPurchaseRecord):", error);
-    }
-}
-
 app.get('/api/products', async (req, res) => {
     try {
         const products = await getProducts();
-        const requesterAddress = req.query.address;
-
-        console.log(`[GET] Fetching products list. Count: ${products.length} (requested by: ${requesterAddress || 'anonymous'})`);
-        const safeProducts = await Promise.all(products.map(async p => {
+        console.log(`[GET] Fetching products list. Count: ${products.length}`);
+        const safeProducts = products.map(p => {
             const { secret, ...safeProduct } = p;
-            let isPurchased = false;
-            if (requesterAddress) {
-                const purchasedBy = await getPurchasedBy(p.id);
-                isPurchased = purchasedBy.includes(requesterAddress);
-            }
-            return { ...safeProduct, isPurchased };
-        }));
+            return safeProduct;
+        });
         res.json(safeProducts);
     } catch (error) {
         console.error(`[ERROR] Products endpoint failed: ${error.message}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// 購入完了をサーバーに通知するエンドポイント
-app.post('/api/products/:id/purchase_confirm', async (req, res) => {
-    try {
-        const id = req.params.id;
-        const { address, transactionHash } = req.body;
-
-        if (!address || !transactionHash) {
-            return res.status(400).json({ error: "Address and TransactionHash are required" });
-        }
-
-        // 本来はここでオンチェーンのトランザクションを確認すべきだが、
-        // まずは簡易的に履歴を保存する
-        await addPurchaseRecord(id, address);
-        
-        res.json({ success: true });
-    } catch (error) {
-        console.error("Purchase confirm error:", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -488,9 +429,32 @@ async function saveProducts(products) {
     }
 }
 
+// 新しいヘルパー関数：購入者情報を記録
+async function recordPurchase(productId, buyerPublicKey) {
+    try {
+        const key = `purchased_by:${productId}`;
+        await kv.sadd(key, buyerPublicKey); // セットに購入者公開鍵を追加
+        console.log(`[INFO] Purchase recorded for product ${productId} by ${buyerPublicKey}`);
+    } catch (error) {
+        console.error(`[ERROR] Failed to record purchase for product ${productId}:`, error);
+    }
+}
+
+// ヘルパー関数：購入者情報を取得
+async function getPurchasedBy(productId) {
+    try {
+        const key = `purchased_by:${productId}`;
+        const buyers = await kv.smembers(key); // セットの全メンバーを取得
+        return buyers || [];
+    } catch (error) {
+        console.error(`[ERROR] Failed to get purchasers for product ${productId}:`, error);
+        return [];
+    }
+}
+
 app.get('/api/products/:id/secret', async (req, res) => {
     try {
-        const id = req.params.id;
+        const id = parseInt(req.params.id);
         const requesterAddress = req.query.address; 
         
         console.log(`[GET] Fetching secret for product ID: ${id} (requested by: ${requesterAddress})`);
@@ -506,12 +470,15 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
-        // 購入済みかどうかの確認
+        // 購入者リストを取得
         const purchasedBy = await getPurchasedBy(id);
-        const isPurchased = purchasedBy.includes(requesterAddress);
 
-        // 出品者、運営、または購入済みのユーザーのみが閲覧可能
-        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !isPurchased) {
+        // requesterAddress が販売者、運営者、または購入者の一人であるかをチェック
+        const hasAccess = requesterAddress === product.sellerAddress || 
+                          requesterAddress === OPERATOR_ADDRESS ||
+                          purchasedBy.includes(requesterAddress);
+
+        if (!hasAccess) {
              return res.json({ secret: "購入後に公開されます" });
         }
         
@@ -525,7 +492,7 @@ app.get('/api/products/:id/secret', async (req, res) => {
 
 app.get('/api/products/:id/download', async (req, res) => {
     try {
-        const id = req.params.id;
+        const id = parseInt(req.params.id);
         const requesterAddress = req.query.address;
         
         const products = await getProducts();
@@ -533,21 +500,20 @@ app.get('/api/products/:id/download', async (req, res) => {
         
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        if (!requesterAddress) {
-            return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
-        }
-
-        // 購入済みかどうかの確認
-        const purchasedBy = await getPurchasedBy(id);
-        const isPurchased = purchasedBy.includes(requesterAddress);
-
         const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
-        // 権限チェック
-        if (!isPurchased && requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
-            return res.status(403).json({ error: "この商品を購入していません。" });
+        // 購入者リストを取得
+        const purchasedBy = await getPurchasedBy(id);
+
+        // requesterAddress が販売者、運営者、または購入者の一人であるかをチェック
+        const hasAccess = requesterAddress === product.sellerAddress || 
+                          requesterAddress === OPERATOR_ADDRESS ||
+                          purchasedBy.includes(requesterAddress);
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: "ダウンロード権限がありません。" });
         }
 
         const secretStr = product.secret.replace('URL: ', '');
@@ -637,8 +603,8 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
         console.log("[DEBUG] Products save attempt completed.");
         res.json({ success: true, product: newProduct });
     } catch (error) {
-        console.error("[SERVER ERROR - /api/products]:", error); // 詳細なログを追加
-        res.status(500).json({ success: false, error: error.message, stack: error.stack }); // stack を追加して詳細化
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
