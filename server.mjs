@@ -5,15 +5,19 @@ import path from 'path';
 import multer from 'multer';
 import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
-import {
+import * as symbolSdk from 'symbol-sdk';
+
+// SDK v3 のエクスポート構造に合わせる
+const {
     PrivateKey,
     PublicKey,
     Signature,
-    KeyPair,
     SymbolFacade,
-    utils,
-    models
-} from 'symbol-sdk';
+    utils
+} = symbolSdk;
+
+// KeyPair は core または facade から取得する必要があるが、
+// facade.network.publicKeyToAddress 等で代用可能
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +25,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Vercel KV REST API のURLとトークン
 const kv = createClient({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
@@ -35,10 +38,9 @@ const CURRENCY_ID = '72C0212E67A08BCE';
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
 
 const accounts = {
-    A: { name: 'A (Operator)', key: process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC', pub: '1A10CDF39F44BC...' }, // ダミー。実際は環境変数
+    A: { name: 'A (Operator)', key: process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC' },
 };
 
-// 16進数文字列を安全に BigInt に変換
 const toBigInt = (val) => {
     if (typeof val === 'bigint') return val;
     if (typeof val === 'number') return BigInt(Math.floor(val));
@@ -46,9 +48,6 @@ const toBigInt = (val) => {
     return BigInt(cleanHex);
 };
 
-/**
- * オンチェーンで購入履歴を確認する
- */
 async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
     try {
         const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
@@ -103,7 +102,6 @@ async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productT
 }
 
 async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
-    console.log(`[VERIFY] Start logic for ${buyerAddress} -> ${sellerAddress} (${amount} XYM)`);
     const maxRetries = 4;
     for (let i = 0; i < maxRetries; i++) {
         const found = await _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle);
@@ -133,7 +131,6 @@ async function saveProducts(products) {
     await kv.set("products", products);
 }
 
-// API Routes
 app.get('/api/products', async (req, res) => {
     const products = await getProducts();
     res.json(products.map(({ secret, ...p }) => p));
@@ -145,10 +142,10 @@ app.get('/api/products/:id/secret', async (req, res) => {
     const p = products.find(prod => String(prod.id) === String(req.params.id));
     if (!p) return res.status(404).json({ error: "Not found" });
 
-    const opKey = process.env.OPERATOR_PRIVATE_KEY || accounts.A.key;
-    const opAddr = facade.network.publicKeyToAddress(new KeyPair(new PrivateKey(utils.hexToUint8(opKey))).publicKey).toString();
+    const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
+    const opPubKey = facade.network.publicKeyToAddress(facade.createPublicKeysFromPrivateKeys(opPrivKey)).toString();
 
-    const isAuthorized = (address === p.sellerAddress || address === opAddr);
+    const isAuthorized = (address === p.sellerAddress || address === opPubKey);
     if (!isAuthorized && address) {
         const purchased = await verifyPurchaseOnChain(address, p.sellerAddress, p.price, p.title);
         if (purchased) return res.json({ secret: p.secret });
@@ -164,9 +161,9 @@ app.get('/api/products/:id/download', async (req, res) => {
         const product = products.find(p => String(p.id) === String(id));
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        const opKey = process.env.OPERATOR_PRIVATE_KEY || accounts.A.key;
-        const opKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(opKey)));
-        const OP_ADDR = facade.network.publicKeyToAddress(opKeyPair.publicKey).toString();
+        const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
+        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+        const OP_ADDR = facade.network.publicKeyToAddress(opPubKey).toString();
 
         let isAuthorized = (address === product.sellerAddress || address === OP_ADDR);
 
@@ -242,8 +239,9 @@ app.post('/api/build_transaction', async (req, res) => {
         const { productId, buyerPublicKey } = req.body;
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(productId));
-        const opKey = process.env.OPERATOR_PRIVATE_KEY || accounts.A.key;
-        const opKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(opKey)));
+        
+        const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
+        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
 
         const tx1 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
@@ -254,7 +252,7 @@ app.post('/api/build_transaction', async (req, res) => {
         });
         const tx2 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
-            signerPublicKey: opKeyPair.publicKey,
+            signerPublicKey: opPubKey,
             recipientAddress: facade.network.publicKeyToAddress(new PublicKey(utils.hexToUint8(buyerPublicKey))),
             message: new TextEncoder().encode(p.secret)
         });
@@ -262,13 +260,13 @@ app.post('/api/build_transaction', async (req, res) => {
         const txs = [tx1, tx2];
         const aggregateTx = facade.transactionFactory.create({
             type: 'aggregate_complete_transaction_v2',
-            signerPublicKey: opKeyPair.publicKey,
+            signerPublicKey: opPubKey,
             deadline: BigInt(Date.now() - 1667250467000 + 7200000),
             transactionsHash: facade.constructor.hashEmbeddedTransactions(txs),
             transactions: txs
         });
         facade.constructor.attachMaxFee(aggregateTx, 100);
-        aggregateTx.signature = facade.sign(aggregateTx, opKeyPair.privateKey);
+        aggregateTx.signature = facade.sign(aggregateTx, opPrivKey);
 
         res.json({ success: true, payload: utils.uint8ToHex(aggregateTx.serialize()), hash: facade.hashTransaction(aggregateTx).toString() });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -297,8 +295,8 @@ app.post('/api/announce_transaction', async (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-    const opKey = process.env.OPERATOR_PRIVATE_KEY || accounts.A.key;
-    const opPubKey = new KeyPair(new PrivateKey(utils.hexToUint8(opKey))).publicKey;
+    const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
+    const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
     res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID });
 });
 
