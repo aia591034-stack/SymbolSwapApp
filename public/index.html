@@ -1042,48 +1042,46 @@
             }
         }
 
-        // Wallet Logic
-        document.getElementById('connectSssBtn').onclick = async () => {
-            log('Scanning for SSS Identity...');
-            let retry = 0;
-            const check = setInterval(() => {
-                if (window.SSS) {
-                    clearInterval(check);
-                    activeAddress = window.SSS.activeAddress;
-                    activePublicKey = window.SSS.activePublicKey;
+        // Direct Mode Logic
+        function setAuthMode(mode) {
+            authMode = mode;
+            document.getElementById('mode-sss').className = mode === 'sss' ? 'px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all bg-indigo-500 text-white' : 'px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all text-slate-500 hover:text-indigo-400';
+            document.getElementById('mode-direct').className = mode === 'direct' ? 'px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all bg-yellow-500 text-black' : 'px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all text-slate-500 hover:text-indigo-400';
+            document.getElementById('direct-mode-panel').classList.toggle('hidden', mode !== 'direct');
+            document.getElementById('connectSssBtn').classList.toggle('hidden', mode !== 'sss');
+        }
 
-                    if (!activeAddress) {
-                        log('Please unlock SSS extension', 'error');
-                        return;
-                    }
-
-                    const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                    document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
-                    document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
-
-                    document.getElementById('user-address-short').innerText = activeAddress;
-                    document.getElementById('user-avatar').innerText = activeAddress[0];
-                    userDashboard.classList.remove('hidden');
-
-                    document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                    document.getElementById('connect-prompt').classList.add('hidden');
-
-                    if (activeAddress === operatorAddress) {
-                        document.getElementById('admin-badge').classList.remove('hidden');
-                        log('Privileged Access Granted', 'success');
-                    }
-
-                    log(`Identity linked: ${activeAddress}`, 'success');
-                    showToast('Welcome to the Nexus');
-                    updateBalance();
-                    renderProducts();
-                }
-                if (++retry > 10) {
-                    clearInterval(check);
-                    log('SSS Identity Provider not detected', 'error');
-                }
-            }, 500);
-        };
+        async function connectDirect() {
+            const pk = document.getElementById('user-private-key').value.trim();
+            console.log("接続ボタン押下: 秘密鍵長:", pk.length);
+            
+            if (pk.length !== 64) {
+                alert('秘密鍵は64桁の16進数である必要があります。');
+                return;
+            }
+            
+            try {
+                const account = symbol.Account.createFromPrivateKey(pk, symbol.NetworkType.TEST_NET);
+                activeAddress = account.address.plain();
+                activePublicKey = account.publicKey;
+                activePrivateKey = pk;
+                
+                document.getElementById('status').innerText = '接続済み: ' + activeAddress.substring(0, 10) + '...';
+                document.getElementById('user-address-short').innerText = activeAddress;
+                document.getElementById('user-avatar').innerText = activeAddress[0];
+                userDashboard.classList.remove('hidden');
+                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('connect-prompt').classList.add('hidden');
+                
+                showToast('接続成功: 秘密鍵モード');
+                log(`直接接続完了: ${activeAddress}`, 'success');
+                updateBalance();
+                renderProducts();
+            } catch (e) {
+                console.error("接続エラー:", e);
+                alert('接続失敗: 秘密鍵を確認してください。');
+            }
+        }
 
         async function buyProduct(p) {
             if (!activeAddress) return showToast('Link wallet to proceed');
