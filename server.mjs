@@ -18,15 +18,57 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 
-console.log('--- AETHER MARKET SERVER STARTING (v1.1.3) ---');
+// --- Database Functions ---
 
-// ESMでサブモジュールのインポートが不安定な場合があるため、より明示的なパス指定を検討
-import * as symbol_pkg_main from 'symbol-sdk';
-import * as symbol_pkg_core from 'symbol-sdk/symbol';
+async function getProducts() {
+    try {
+        const data = await kv.get("products");
+        return data || [];
+    } catch (error) {
+        console.error("Vercel KV read error:", error);
+        return [];
+    }
+}
 
-// SDK v3 の正しいクラス参照を定義
-const { SymbolFacade, KeyPair, models } = symbol_pkg_core;
-const { PrivateKey, PublicKey, Signature, utils } = symbol_pkg_main;
+async function saveProducts(products) {
+    try {
+        await kv.set("products", products);
+    } catch (error) {
+        console.error("Vercel KV write error:", error);
+    }
+}
+
+/**
+ * 購入履歴を取得する
+ */
+async function getPurchasedBy(productId) {
+    try {
+        const key = `purchased_${productId}`;
+        const data = await kv.get(key);
+        return data || [];
+    } catch (error) {
+        console.error("Vercel KV read error (purchasedBy):", error);
+        return [];
+    }
+}
+
+/**
+ * 購入履歴を追加する
+ */
+async function addPurchaseRecord(productId, address) {
+    try {
+        const key = `purchased_${productId}`;
+        const purchasedBy = await getPurchasedBy(productId);
+        if (!purchasedBy.includes(address)) {
+            purchasedBy.push(address);
+            await kv.set(key, purchasedBy);
+            console.log(`[INFO] Purchase recorded: Product ${productId} by ${address}`);
+        }
+    } catch (error) {
+        console.error("Vercel KV write error (addPurchaseRecord):", error);
+    }
+}
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
