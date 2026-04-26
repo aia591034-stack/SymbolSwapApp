@@ -892,7 +892,7 @@
             if (activeAddress) {
                 const myItemsCount = allProducts.filter(p => p.sellerAddress === activeAddress).length;
                 document.getElementById('my-items-count').innerText = myItemsCount;
-                const purchasedCount = Object.keys(localStorage).filter(k => k.startsWith('purchased_')).length;
+                const purchasedCount = allProducts.filter(p => p.isPurchased).length;
                 document.getElementById('purchased-count').innerText = purchasedCount;
             }
 
@@ -921,7 +921,7 @@
 
                             <div class="absolute bottom-4 md:bottom-6 left-6 md:left-8 right-6 md:right-8">
                                 <div class="flex items-center space-x-2 md:space-x-3 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2 md:mb-3">
-                                    <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'OWNED BY YOU' : 'AVAILABLE'}</span>
+                                    <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'OWNED BY YOU' : (p.isPurchased ? 'PURCHASED' : 'AVAILABLE')}</span>
                                     <span class="text-white/40">•</span>
                                     <span class="text-white/60">${p.fileName ? p.fileName.split('.').pop().toUpperCase() : 'ASSET'}</span>
                                 </div>
@@ -934,7 +934,7 @@
                             </p>
                             ${isOwner ? `
                             <div class="flex space-x-2 md:space-x-3">
-                                <button onclick='event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/'/g, "'")})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
+                                <button onclick='event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/'/g, "&apos;")})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
                                     MODIFY
                                 </button>
                                 <button onclick='event.stopPropagation(); deleteProduct(${p.id})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 transition-all border border-white/5 shadow-sm">
@@ -952,7 +952,7 @@
                     list.appendChild(card);
 
                     // Check if already purchased
-                    if (localStorage.getItem(`purchased_${p.id}`)) {
+                    if (p.isPurchased) {
                         const btn = document.getElementById(`buy-${p.id}`);
                         if (btn) {
                             btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-3 text-lg"></i>RETRIEVE ASSET';
@@ -982,7 +982,8 @@
                 const operatorAccount = symbol.PublicAccount.createFromPublicKey(config.operatorPublicKey, networkType);
                 operatorAddress = operatorAccount.address.plain();
 
-                const res = await fetch('/api/products');
+                const url = activeAddress ? `/api/products?address=${activeAddress}` : '/api/products';
+                const res = await fetch(url);
                 allProducts = await res.json();
                 renderProducts();
             } catch (e) {
@@ -1075,7 +1076,9 @@
                     log(`Identity linked: ${activeAddress}`, 'success');
                     showToast('Welcome to the Nexus');
                     updateBalance();
-                    renderProducts();
+                    
+                    // アドレス確定後に商品リストを再読込
+                    await loadProducts();
                 }
                 if (++retry > 10) {
                     clearInterval(check);
@@ -1092,70 +1095,71 @@
 
             log(`Initiating swap protocol: ${p.title}`);
             try {
-                const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
-                if (!secretRes.ok) throw new Error('Failed to retrieve asset data');
-                const { secret } = await secretRes.json();
+                showSwapOverlay('Constructing Tx', 'サーバーでトランザクションを構築中...', 30);
 
-                const configRes = await fetch('/api/config');
-                const config = await configRes.json();
-                const networkType = symbol.NetworkType.TEST_NET;
-
-                const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
-                const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
-                const epochAdjustment = 1667250467;
-
-                showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
-
-                const txPayment = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    sellerAccount.address,
-                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
-                    symbol.PlainMessage.create('Nexus Swap: ' + p.title),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const txData = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    buyerAccount.address,
-                    [],
-                    symbol.PlainMessage.create(secret),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment),
-                    [txPayment, txData],
-                    networkType,
-                    [],
-                    symbol.UInt64.fromUint(1000000)
-                );
-
-                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                window.SSS.setTransaction(aggregateTx);
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx?.payload) throw new Error('Protocol rejected by user');
-
-                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
-                const res = await fetch('/api/purchase_sss', {
+                // 1. サーバーにトランザクション構築を依頼
+                const buildRes = await fetch('/api/build_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ signedPayload: signedTx.payload })
+                    body: JSON.stringify({
+                        productId: p.id,
+                        buyerPublicKey: activePublicKey,
+                        activeAddress: activeAddress
+                    })
                 });
-                const data = await res.json();
 
-                if (data.success) {
+                if (!buildRes.ok) {
+                    const errorData = await buildRes.json();
+                    throw new Error(errorData.error || '構築失敗');
+                }
+
+                const { payload, hash } = await buildRes.json();
+
+                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
+
+                // 2. SSSで署名
+                const aggregateTx = symbol.TransactionMapping.createFromPayload(payload);
+                window.SSS.setTransaction(aggregateTx);
+                
+                const signedTx = await window.SSS.requestSign();
+                if (!signedTx || !signedTx.payload) {
+                    throw new Error('署名がキャンセルされました');
+                }
+
+                // 署名（コサイン署名）を抽出
+                const cosignature = {
+                    parentHash: hash,
+                    signature: signedTx.signature,
+                    signerPublicKey: activePublicKey
+                };
+
+                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+
+                // 3. アナウンス
+                const announceRes = await fetch('/api/announce_transaction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        payload: payload,
+                        cosignatures: [cosignature]
+                    })
+                });
+
+                const announceData = await announceRes.json();
+                if (announceRes.ok && announceData.success) {
                     log('Transaction broadcasted', 'success');
-                    checkStatus(signedTx.hash, activeAddress, p);
+                    checkStatus(hash, activeAddress, p);
                 } else {
-                    throw new Error(data.error);
+                    throw new Error(announceData.error || '送信失敗');
                 }
             } catch (e) {
                 log(e, 'error');
+                showToast(e.message);
                 hideSwapOverlay();
             }
         }
 
-        async function checkStatus(hash, buyerName, p) {
+        async function checkStatus(hash, buyerAddress, p) {
             let retryCount = 0;
             const maxRetries = 20;
 
@@ -1170,15 +1174,25 @@
 
                     if (data.group === 'confirmed') {
                         clearInterval(interval);
+                        
+                        // サーバー側で購入履歴を確定させる
+                        await fetch(`/api/products/${p.id}/purchase_confirm`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                address: buyerAddress,
+                                transactionHash: hash
+                            })
+                        });
+
                         document.getElementById('node-seller').classList.add('active');
                         showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
 
                         log('Swap validated by consensus', 'success');
                         showToast('Asset unlocked successfully');
 
-                        localStorage.setItem(`purchased_${p.id}`, 'true');
-                        updateBalance();
-                        renderProducts();
+                        // 商品情報を再取得して表示を更新
+                        await loadProducts();
                         hideSwapOverlay();
                     } else if (data.group === 'failed') {
                         clearInterval(interval);
