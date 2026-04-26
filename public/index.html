@@ -1043,47 +1043,50 @@
         }
 
         // Wallet Logic
+        // Wallet Logic
         document.getElementById('connectSssBtn').onclick = async () => {
             log('Scanning for SSS Identity...');
             let retry = 0;
             const check = setInterval(() => {
-                if (window.SSS) {
-                    clearInterval(check);
-                    activeAddress = window.SSS.activeAddress;
-                    activePublicKey = window.SSS.activePublicKey;
+                (async () => { // IIFE でラップして await エラーを回避
+                    if (window.SSS) {
+                        clearInterval(check);
+                        activeAddress = window.SSS.activeAddress;
+                        activePublicKey = window.SSS.activePublicKey;
 
-                    if (!activeAddress) {
-                        log('Please unlock SSS extension', 'error');
-                        return;
+                        if (!activeAddress) {
+                            log('Please unlock SSS extension', 'error');
+                            return;
+                        }
+
+                        const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                        document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
+                        document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+
+                        document.getElementById('user-address-short').innerText = activeAddress;
+                        document.getElementById('user-avatar').innerText = activeAddress[0];
+                        userDashboard.classList.remove('hidden');
+
+                        document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                        document.getElementById('connect-prompt').classList.add('hidden');
+
+                        if (activeAddress === operatorAddress) {
+                            document.getElementById('admin-badge').classList.remove('hidden');
+                            log('Privileged Access Granted', 'success');
+                        }
+
+                        log(`Identity linked: ${activeAddress}`, 'success');
+                        showToast('Welcome to the Nexus');
+                        updateBalance();
+                        
+                        // アドレス確定後に商品リストを再読込
+                        await loadProducts();
                     }
-
-                    const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                    document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
-                    document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
-
-                    document.getElementById('user-address-short').innerText = activeAddress;
-                    document.getElementById('user-avatar').innerText = activeAddress[0];
-                    userDashboard.classList.remove('hidden');
-
-                    document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                    document.getElementById('connect-prompt').classList.add('hidden');
-
-                    if (activeAddress === operatorAddress) {
-                        document.getElementById('admin-badge').classList.remove('hidden');
-                        log('Privileged Access Granted', 'success');
+                    if (++retry > 10) {
+                        clearInterval(check);
+                        log('SSS Identity Provider not detected', 'error');
                     }
-
-                    log(`Identity linked: ${activeAddress}`, 'success');
-                    showToast('Welcome to the Nexus');
-                    updateBalance();
-                    
-                    // アドレス確定後に商品リストを再読込
-                    await loadProducts();
-                }
-                if (++retry > 10) {
-                    clearInterval(check);
-                    log('SSS Identity Provider not detected', 'error');
-                }
+                })();
             }, 500);
         };
 
@@ -1163,50 +1166,52 @@
             let retryCount = 0;
             const maxRetries = 20;
 
-            const interval = setInterval(async () => {
-                retryCount++;
-                showSwapOverlay('Validating', `ネットワークの承認を待機中... (${retryCount}/${maxRetries})`, 80 + (retryCount));
+            const interval = setInterval(() => {
+                (async () => { // IIFE でラップして await エラーを回避
+                    retryCount++;
+                    showSwapOverlay('Validating', `ネットワークの承認を待機中... (${retryCount}/${maxRetries})`, 80 + (retryCount));
 
-                try {
-                    const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
-                    const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
-                    const data = await res.json();
+                    try {
+                        const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
+                        const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
+                        const data = await res.json();
 
-                    if (data.group === 'confirmed') {
+                        if (data.group === 'confirmed') {
+                            clearInterval(interval);
+                            
+                            // サーバー側で購入履歴を確定させる
+                            await fetch(`/api/products/${p.id}/purchase_confirm`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    address: buyerAddress,
+                                    transactionHash: hash
+                                })
+                            });
+
+                            document.getElementById('node-seller').classList.add('active');
+                            showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
+
+                            log('Swap validated by consensus', 'success');
+                            showToast('Asset unlocked successfully');
+
+                            // 商品情報を再取得して表示を更新
+                            await loadProducts();
+                            hideSwapOverlay();
+                        } else if (data.group === 'failed') {
+                            clearInterval(interval);
+                            showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
+                            log(`Consensus error: ${data.code}`, 'error');
+                            hideSwapOverlay();
+                        }
+                    } catch (e) { /* エラーはログに記録されるため、ここで特別な処理はしない */ }
+
+                    if (retryCount >= maxRetries) {
                         clearInterval(interval);
-                        
-                        // サーバー側で購入履歴を確定させる
-                        await fetch(`/api/products/${p.id}/purchase_confirm`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                address: buyerAddress,
-                                transactionHash: hash
-                            })
-                        });
-
-                        document.getElementById('node-seller').classList.add('active');
-                        showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
-
-                        log('Swap validated by consensus', 'success');
-                        showToast('Asset unlocked successfully');
-
-                        // 商品情報を再取得して表示を更新
-                        await loadProducts();
-                        hideSwapOverlay();
-                    } else if (data.group === 'failed') {
-                        clearInterval(interval);
-                        showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
-                        log(`Consensus error: ${data.code}`, 'error');
+                        showSwapOverlay('Timeout', 'ネットワークが混雑しています', 0);
                         hideSwapOverlay();
                     }
-                } catch (e) { }
-
-                if (retryCount >= maxRetries) {
-                    clearInterval(interval);
-                    showSwapOverlay('Timeout', 'ネットワークが混雑しています', 0);
-                    hideSwapOverlay();
-                }
+                })();
             }, 5000);
         }
 
