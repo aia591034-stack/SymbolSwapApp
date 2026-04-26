@@ -5,14 +5,32 @@ import path from 'path';
 import multer from 'multer';
 import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
-import * as symbolSdkModule from 'symbol-sdk';
-
-const { SymbolFacade, PrivateKey, PublicKey, Signature, KeyPair, utils } = symbolSdkModule;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
+
+// グローバルスコープで SDK 関連を保持
+let SymbolFacade, PrivateKey, PublicKey, Signature, KeyPair, utils, facade;
+
+async function initSDK() {
+    if (facade) return;
+    const mod = await import('symbol-sdk');
+    const SDK = mod.SymbolFacade ? mod : (mod.default || mod);
+    SymbolFacade = SDK.SymbolFacade;
+    PrivateKey = SDK.PrivateKey;
+    PublicKey = SDK.PublicKey;
+    Signature = SDK.Signature;
+    KeyPair = SDK.KeyPair;
+    utils = SDK.utils;
+    facade = new SymbolFacade('testnet');
+}
+
+// SDK 初期化用ミドルウェア
+app.use(async (req, res, next) => {
+    try { await initSDK(); next(); } catch (e) { res.status(500).json({ error: "SDK Init Error" }); }
+});
 
 const kv = createClient({
   url: process.env.KV_REST_API_URL,
@@ -22,7 +40,6 @@ const kv = createClient({
 app.use(cors());
 app.use(express.json());
 
-const facade = new SymbolFacade('testnet');
 const CURRENCY_ID = '72C0212E67A08BCE'; 
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
 const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC';
@@ -39,14 +56,23 @@ const upload = multer({ storage });
 async function getProducts() { try { return (await kv.get("products")) || []; } catch (e) { return []; } }
 async function saveProducts(products) { try { await kv.set("products", products); } catch (e) { } }
 
-// 秘密鍵モードのトランザクション構築用エンドポイント
+// API Routes
+app.get('/api/config', (req, res) => {
+    const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
+    const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+    res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID, status: "ready" });
+});
+
+app.get('/api/products', async (req, res) => {
+    const products = await getProducts();
+    res.json(products.map(({ secret, ...p }) => p));
+});
+
 app.post('/api/build_transaction', async (req, res) => {
     try {
         const { productId, buyerPublicKey } = req.body;
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(productId));
-        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
-
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opKeyPair = new KeyPair(opPrivKey);
         
@@ -65,7 +91,6 @@ app.post('/api/build_transaction', async (req, res) => {
             message: new TextEncoder().encode(p.secret)
         });
 
-        // 成功を期して Bonded で構築
         const aggregateTx = facade.transactionFactory.create({
             type: 'aggregate_bonded_transaction_v2',
             signerPublicKey: opKeyPair.publicKey,
@@ -82,15 +107,32 @@ app.post('/api/build_transaction', async (req, res) => {
             payload: utils.uint8ToHex(aggregateTx.serialize()), 
             hash: facade.hashTransaction(aggregateTx).toString() 
         });
-    } catch (e) { 
-        res.status(500).json({ error: e.message }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 静的ファイルの提供
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(uploadDir));
+app.post('/api/announce_transaction', async (req, res) => {
+    try {
+        const { payload, cosignatures } = req.body;
+        const txBytes = utils.hexToUint8(payload);
+        let finalBytes = new Uint8Array(txBytes.length + (cosignatures.length * 104));
+        finalBytes.set(txBytes);
+        let offset = txBytes.length;
+        for (const cosig of cosignatures) {
+            const view = new DataView(finalBytes.buffer, finalBytes.byteOffset + offset, 8);
+            view.setBigUint64(0, 0n, true); offset += 8;
+            finalBytes.set(utils.hexToUint8(cosig.signerPublicKey), offset); offset += 32;
+            finalBytes.set(utils.hexToUint8(cosig.signature), offset); offset += 64;
+        }
+        const response = await fetch(`${NODE_URL}/transactions`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: utils.uint8ToHex(finalBytes) })
+        });
+        if (!response.ok) throw new Error(await response.text());
+        res.json({ success: true, hash: facade.hashTransaction(facade.transactionFactory.createFromPayload(txBytes)).toString() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
+app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 if (process.env.NODE_ENV !== 'production') {
