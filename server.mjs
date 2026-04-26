@@ -61,8 +61,8 @@ const port = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// アップロードされたファイルを配信するルート (IPFS失敗時のフォールバック用)
-app.use('/uploads', express.static(uploadDir));
+// アップロードされたファイルを配信するルート (静的配信を停止し、認証付きルートへ移行)
+// app.use('/uploads', express.static(uploadDir));
 
 // Symbol SDK v3 のブラウザ用バイナリを配信
 app.get('/lib/symbol-sdk-v3.js', (req, res) => {
@@ -184,6 +184,70 @@ const toBigInt = (val) => {
     const cleanHex = String(val).startsWith('0x') ? val : '0x' + val;
     return BigInt(cleanHex);
 };
+
+/**
+ * オンチェーンで購入履歴を確認する
+ */
+async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
+    try {
+        console.log(`[DEBUG] Verifying purchase on-chain: ${buyerAddress} -> ${sellerAddress}, ${amount} XYM`);
+        const url = `${NODE_URL}/accounts/${buyerAddress}/transactions/confirmed?pageSize=20`;
+        const res = await fetch(url);
+        if (!res.ok) return false;
+        const data = await res.json();
+
+        for (const txWrapper of data.data) {
+            const tx = txWrapper.transaction;
+            
+            // Aggregate Transaction
+            if (tx.type === 16705 || tx.type === 16961) {
+                const embeddedTransactions = tx.transactions || [];
+                const paymentTx = embeddedTransactions.find(etx => {
+                    const e = etx.transaction;
+                    const isTransfer = e.type === 16717;
+                    const isToSeller = e.recipientAddress === sellerAddress;
+                    const hasAmount = e.mosaics && e.mosaics.some(m => 
+                               m.id === CURRENCY_ID && 
+                               BigInt(m.amount) === BigInt(amount * 1000000)
+                           );
+                    
+                    let hasCorrectMessage = true;
+                    if (e.message) {
+                        try {
+                            const msgStr = Buffer.from(e.message.substring(2), 'hex').toString();
+                            hasCorrectMessage = msgStr.includes(productTitle) || msgStr.includes("Nexus Swap");
+                        } catch (err) {
+                            console.warn("Message decode error:", err);
+                        }
+                    }
+                    
+                    return isTransfer && isToSeller && hasAmount && hasCorrectMessage;
+                });
+
+                if (paymentTx) {
+                    console.log(`[SUCCESS] Found matching payment in aggregate tx: ${txWrapper.meta.hash}`);
+                    return true;
+                }
+            }
+            
+            // Simple Transfer
+            if (tx.type === 16717 && tx.recipientAddress === sellerAddress) {
+                const hasAmount = tx.mosaics && tx.mosaics.some(m => 
+                    m.id === CURRENCY_ID && 
+                    BigInt(m.amount) === BigInt(amount * 1000000)
+                );
+                if (hasAmount) {
+                     console.log(`[SUCCESS] Found matching simple payment tx: ${txWrapper.meta.hash}`);
+                     return true;
+                }
+            }
+        }
+        return false;
+    } catch (e) {
+        console.error("verifyPurchaseOnChain Error:", e);
+        return false;
+    }
+}
 
 // Vercel等のDBがない環境用の一時的な保存先
 
@@ -447,7 +511,17 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
-        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
+        // 許可されるのは、出品者、運営、または購入済みの人
+        const isAuthorized = (requesterAddress === product.sellerAddress || requesterAddress === OPERATOR_ADDRESS);
+        
+        if (!isAuthorized && requesterAddress) {
+            const purchased = await verifyPurchaseOnChain(requesterAddress, product.sellerAddress, product.price, product.title);
+            if (purchased) {
+                return res.json({ secret: product.secret });
+            }
+        }
+
+        if (!isAuthorized) {
              return res.json({ secret: "購入後に公開されます" });
         }
         
@@ -462,29 +536,81 @@ app.get('/api/products/:id/secret', async (req, res) => {
 app.get('/api/products/:id/download', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const requesterAddress = req.query.address;
+        const { address, publicKey, signature, timestamp } = req.query;
         
+        console.log(`[GET] Download request for product ID: ${id} (Address: ${address})`);
+
         const products = await getProducts();
         const product = products.find(p => String(p.id) === String(id));
-        
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        if (!requesterAddress) {
-            return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
+        // 1. 署名と権限の検証
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
+
+        let isAuthorized = (address === product.sellerAddress || address === OPERATOR_ADDRESS);
+
+        if (!isAuthorized) {
+            if (!address || !publicKey || !signature || !timestamp) {
+                return res.status(403).json({ error: "認証情報が不足しています。署名付きリクエストが必要です。" });
+            }
+
+            // 署名の有効期限チェック (5分以内)
+            if (Math.abs(Date.now() - parseInt(timestamp)) > 5 * 60 * 1000) {
+                return res.status(403).json({ error: "署名の期限が切れています。もう一度お試しください。" });
+            }
+
+            // 署名の検証
+            try {
+                const message = `DownloadAsset:${id}:${timestamp}`;
+                const isValidSignature = facade.verify(
+                    new PublicKey(utils.hexToUint8(publicKey)),
+                    new TextEncoder().encode(message),
+                    new Signature(utils.hexToUint8(signature))
+                );
+
+                if (!isValidSignature) {
+                    return res.status(403).json({ error: "署名検証に失敗しました。" });
+                }
+
+                // 公開鍵から導出されたアドレスが一致するか確認
+                const derivedAddress = facade.network.publicKeyToAddress(new PublicKey(utils.hexToUint8(publicKey))).toString();
+                if (derivedAddress !== address) {
+                    return res.status(403).json({ error: "アドレスと公開鍵が一致しません。" });
+                }
+
+                // 購入履歴をオンチェーンで確認
+                isAuthorized = await verifyPurchaseOnChain(address, product.sellerAddress, product.price, product.title);
+            } catch (err) {
+                console.error("Signature verify error:", err);
+                return res.status(403).json({ error: "認証プロセス中にエラーが発生しました。" });
+            }
         }
 
-        const secretStr = product.secret.replace('URL: ', '');
-        console.log(`[DEBUG - /api/products/:id/download] secretStr: ${secretStr}`);
-        if (secretStr.startsWith('http')) {
-            // Pinata (IPFS) のURLの場合は直接リダイレクトする
-            console.log(`[INFO] Redirecting to IPFS gateway: ${secretStr}`);
-            res.redirect(secretStr);
-        } else {
-            // Pinata URLではない場合、ファイルが見つからないというエラーを返す
-            console.log(`[WARN] Non-IPFS URL or local path attempted for download: ${secretStr}`);
-            res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
+        if (!isAuthorized) {
+            return res.status(403).json({ error: "ダウンロード権限がありません。商品を購入してください。" });
         }
+
+        // 2. ファイルの送信
+        const secretStr = product.secret.replace('URL: ', '');
+        console.log(`[DEBUG] Delivering content: ${secretStr}`);
+
+        if (secretStr.includes('/uploads/')) {
+            const fileName = secretStr.split('/uploads/').pop();
+            const filePath = path.join(uploadDir, fileName);
+            if (fs.existsSync(filePath)) {
+                return res.download(filePath, product.fileName || fileName);
+            }
+        }
+        
+        if (secretStr.startsWith('http')) {
+            return res.redirect(secretStr);
+        }
+        
+        res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
     } catch (error) {
+        console.error("Download Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -535,13 +661,16 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 
         const protocol = req.protocol;
         const host = req.get('host');
-        const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
+        const productId = Date.now();
+        
+        // ローカル保存の場合、直接ファイルを指すのではなくダウンロードエンドポイントをシークレットとする
+        const secretUrl = ipfsUrl || `${protocol}://${host}/api/products/${productId}/download`;
 
         console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, using IPFS: ${!!ipfsUrl}`);
 
         const products = await getProducts();
         const newProduct = {
-            id: Date.now(),
+            id: productId,
             title,
             price: parseInt(price),
             seller,

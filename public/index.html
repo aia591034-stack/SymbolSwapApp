@@ -959,10 +959,31 @@
                             btn.className = "w-full py-5 rounded-2xl bg-emerald-500 text-white font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-emerald-500/20";
                             btn.onclick = async () => {
                                 try {
-                                    window.location.href = `/api/products/${p.id}/download?address=${activeAddress}`;
+                                    const timestamp = Date.now();
+                                    const message = `DownloadAsset:${p.id}:${timestamp}`;
+                                    
+                                    log('Linking identity for download...');
+                                    // SSS v2 の signStatusMessage を使用してダウンロード要求を証明する
+                                    const signatureObj = await window.SSS.signStatusMessage(message);
+                                    
+                                    if (!signatureObj || !signatureObj.signature) {
+                                        throw new Error('署名が拒否されました。ダウンロードには本人確認が必要です。');
+                                    }
+
+                                    const query = new URLSearchParams({
+                                        address: activeAddress,
+                                        publicKey: activePublicKey,
+                                        signature: signatureObj.signature,
+                                        timestamp: timestamp
+                                    });
+
+                                    const downloadUrl = `/api/products/${p.id}/download?${query.toString()}`;
+                                    log('Redirecting to secure download vault...');
+                                    window.location.href = downloadUrl;
                                     showToast('Asset retrieval initiated');
                                 } catch (e) {
                                     log(e, 'error');
+                                    showToast('Security verification failed');
                                 }
                             };
                         }
