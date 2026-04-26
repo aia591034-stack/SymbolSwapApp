@@ -1139,11 +1139,7 @@
                 const res = await fetch('/api/purchase_sss', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        signedPayload: signedTx.payload,
-                        productId: p.id,
-                        buyerPublicKey: activePublicKey
-                    })
+                    body: JSON.stringify({ signedPayload: signedTx.payload })
                 });
                 const data = await res.json();
 
