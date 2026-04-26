@@ -190,55 +190,67 @@ const toBigInt = (val) => {
  */
 async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
     try {
-        console.log(`[DEBUG] Verifying purchase on-chain: ${buyerAddress} -> ${sellerAddress}, ${amount} XYM`);
-        const url = `${NODE_URL}/accounts/${buyerAddress}/transactions/confirmed?pageSize=20`;
-        const res = await fetch(url);
-        if (!res.ok) return false;
-        const data = await res.json();
+        console.log(`[DEBUG] Verifying purchase: ${buyerAddress} -> ${sellerAddress}, ${amount} XYM`);
+        
+        // 1. 承認済み(Confirmed) と 未承認(Unconfirmed) の両方をチェックする
+        const endpoints = [
+            `${NODE_URL}/accounts/${buyerAddress}/transactions/confirmed?pageSize=15`,
+            `${NODE_URL}/accounts/${buyerAddress}/transactions/unconfirmed?pageSize=15`
+        ];
 
-        for (const txWrapper of data.data) {
-            const tx = txWrapper.transaction;
-            
-            // Aggregate Transaction
-            if (tx.type === 16705 || tx.type === 16961) {
-                const embeddedTransactions = tx.transactions || [];
-                const paymentTx = embeddedTransactions.find(etx => {
-                    const e = etx.transaction;
-                    const isTransfer = e.type === 16717;
-                    const isToSeller = e.recipientAddress === sellerAddress;
-                    const hasAmount = e.mosaics && e.mosaics.some(m => 
-                               m.id === CURRENCY_ID && 
-                               BigInt(m.amount) === BigInt(amount * 1000000)
-                           );
-                    
-                    let hasCorrectMessage = true;
-                    if (e.message) {
-                        try {
-                            const msgStr = Buffer.from(e.message.substring(2), 'hex').toString();
-                            hasCorrectMessage = msgStr.includes(productTitle) || msgStr.includes("Nexus Swap");
-                        } catch (err) {
-                            console.warn("Message decode error:", err);
+        for (const url of endpoints) {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            const data = await res.json();
+
+            for (const txWrapper of data.data) {
+                const tx = txWrapper.transaction;
+                
+                // Aggregate Transaction (16705: Complete, 16961: Bonded)
+                if (tx.type === 16705 || tx.type === 16961) {
+                    const embeddedTransactions = tx.transactions || [];
+                    const paymentTx = embeddedTransactions.find(etx => {
+                        const e = etx.transaction;
+                        const isTransfer = e.type === 16717;
+                        // アドレスの比較は標準化して行う
+                        const isToSeller = e.recipientAddress === sellerAddress;
+                        const hasAmount = e.mosaics && e.mosaics.some(m => 
+                                   m.id === CURRENCY_ID && 
+                                   BigInt(m.amount) === BigInt(amount * 1000000)
+                               );
+                        
+                        let hasCorrectMessage = true;
+                        if (e.message) {
+                            try {
+                                // Symbolのメッセージは先頭1バイトがタイプ(00=Plain)
+                                // REST API経由では通常16進文字列で返る
+                                const msgHex = e.message;
+                                const msgStr = Buffer.from(msgHex.substring(2), 'hex').toString('utf-8');
+                                hasCorrectMessage = msgStr.includes(productTitle) || msgStr.includes("Nexus Swap");
+                            } catch (err) {
+                                console.warn("Message decode error:", err);
+                            }
                         }
-                    }
-                    
-                    return isTransfer && isToSeller && hasAmount && hasCorrectMessage;
-                });
+                        
+                        return isTransfer && isToSeller && hasAmount && hasCorrectMessage;
+                    });
 
-                if (paymentTx) {
-                    console.log(`[SUCCESS] Found matching payment in aggregate tx: ${txWrapper.meta.hash}`);
-                    return true;
+                    if (paymentTx) {
+                        console.log(`[SUCCESS] Found matching payment tx: ${txWrapper.meta.hash || 'unconfirmed'}`);
+                        return true;
+                    }
                 }
-            }
-            
-            // Simple Transfer
-            if (tx.type === 16717 && tx.recipientAddress === sellerAddress) {
-                const hasAmount = tx.mosaics && tx.mosaics.some(m => 
-                    m.id === CURRENCY_ID && 
-                    BigInt(m.amount) === BigInt(amount * 1000000)
-                );
-                if (hasAmount) {
-                     console.log(`[SUCCESS] Found matching simple payment tx: ${txWrapper.meta.hash}`);
-                     return true;
+                
+                // Simple Transfer (16717)
+                if (tx.type === 16717 && tx.recipientAddress === sellerAddress) {
+                    const hasAmount = tx.mosaics && tx.mosaics.some(m => 
+                        m.id === CURRENCY_ID && 
+                        BigInt(m.amount) === BigInt(amount * 1000000)
+                    );
+                    if (hasAmount) {
+                         console.log(`[SUCCESS] Found matching simple payment tx: ${txWrapper.meta.hash || 'unconfirmed'}`);
+                         return true;
+                    }
                 }
             }
         }
