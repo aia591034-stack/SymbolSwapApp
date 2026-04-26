@@ -3,28 +3,16 @@ import cors from 'cors';
 import fs from 'fs';
 import { createClient } from '@vercel/kv';
 
-const kvUrl = process.env.KV_URL;
-const kvToken = process.env.KV_REST_API_TOKEN;
+// Vercel KV REST API のURLとトークンを使用
+const kvRestApiUrl = process.env.KV_REST_API_URL;
+const kvRestApiToken = process.env.KV_REST_API_TOKEN;
 
-let cleanedKvUrl = undefined;
-if (kvUrl) {
-    // まず認証情報を削除し、rediss:// を https:// に変換
-    let tempUrl = kvUrl.replace(/^rediss?:\/\/[^@]*@/, "https://"); // 認証情報とスキームを変換
-    try {
-        const url = new URL(tempUrl);
-        // 念のためusernameとpasswordを再度クリア
-        url.username = "";
-        url.password = "";
-        cleanedKvUrl = url.toString();
-    } catch (e) {
-        console.error("Error processing KV_URL after initial cleanup:", e);
-        cleanedKvUrl = tempUrl; // パース失敗の場合は変換済みのURLを使用
-    }
-}
+// 認証情報のログを追加
+console.log(`[DEBUG] KV_REST_API_URL present: ${!!kvRestApiUrl}, KV_REST_API_TOKEN present: ${!!kvRestApiToken}`);
 
 const kv = createClient({
-    url: cleanedKvUrl,
-    token: kvToken,
+    url: kvRestApiUrl,
+    token: kvRestApiToken,
 });
 import path from 'path';
 import { fileURLToPath } from 'url';
