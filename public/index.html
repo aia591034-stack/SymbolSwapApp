@@ -1266,8 +1266,8 @@
                     const currentNetworkType = symbol.NetworkType.TEST_NET;
                     const bAccount = symbol.Account.createFromPrivateKey(activePrivateKey, currentNetworkType);
 
-                    // アグリゲートハッシュに対して署名（コサイン署名）を作成
-                    const cosignature = bAccount.signCosignatureTransaction({ hash: hash });
+                    // アグリゲートハッシュに対して直接署名を作成
+                    const signature = bAccount.signData(hash);
 
                     // サーバー側でコサイン署名を結合してアナウンスする
                     const announceRes = await fetch('/api/announce_transaction', {
@@ -1277,7 +1277,7 @@
                             payload: payload,
                             cosignatures: [{
                                 signerPublicKey: activePublicKey,
-                                signature: cosignature.signature
+                                signature: signature
                             }]
                         })
                     });
