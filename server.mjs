@@ -7,15 +7,18 @@ import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
 import * as symbolSdkModule from 'symbol-sdk';
 
-// 環境によって export のされ方が異なる場合に対応
-const symbolSdk = symbolSdkModule.default || symbolSdkModule;
-const {
-    PrivateKey,
-    PublicKey,
-    Signature,
-    SymbolFacade,
-    utils
-} = symbolSdk;
+// Symbol SDK v3 のエクスポート構造の違いを吸収するヘルパー
+const getSdkClass = (name) => {
+    if (symbolSdkModule[name]) return symbolSdkModule[name];
+    if (symbolSdkModule.default && symbolSdkModule.default[name]) return symbolSdkModule.default[name];
+    return undefined;
+};
+
+const SymbolFacade = getSdkClass('SymbolFacade');
+const PrivateKey = getSdkClass('PrivateKey');
+const PublicKey = getSdkClass('PublicKey');
+const Signature = getSdkClass('Signature');
+const utils = getSdkClass('utils');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +34,12 @@ const kv = createClient({
 app.use(cors());
 app.use(express.json());
 
-const facade = new SymbolFacade('testnet');
+// 初期化の安全性を確認
+let facade;
+if (SymbolFacade) {
+    facade = new SymbolFacade('testnet');
+}
+
 const CURRENCY_ID = '72C0212E67A08BCE'; 
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
 
@@ -93,9 +101,7 @@ async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productT
             } catch (e) { }
         }
         return false;
-    } catch (e) {
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
 async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
@@ -159,8 +165,8 @@ app.get('/api/products/:id/download', async (req, res) => {
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
         const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
-        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-        const OP_ADDR = facade.network.publicKeyToAddress(opPubKey).toString();
+        const opPubKeyObj = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+        const OP_ADDR = facade.network.publicKeyToAddress(opPubKeyObj).toString();
 
         let isAuthorized = (address === product.sellerAddress || address === OP_ADDR);
 
