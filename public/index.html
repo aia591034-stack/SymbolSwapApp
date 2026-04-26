@@ -1042,6 +1042,47 @@
             }
         }
 
+        // Wallet Logic
+        document.getElementById('connectSssBtn').addEventListener('click', async () => {
+            log('SSSウォレットをスキャン中...');
+            let retry = 0;
+            const check = setInterval(() => {
+                if (window.SSS) {
+                    clearInterval(check);
+                    authMode = 'sss';
+                    setAuthMode('sss');
+                    activeAddress = window.SSS.activeAddress;
+                    activePublicKey = window.SSS.activePublicKey;
+
+                    if (!activeAddress) {
+                        log('SSSウォレットを解除してください', 'error');
+                        return;
+                    }
+
+                    const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                    document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
+                    
+                    userDashboard.classList.remove('hidden');
+                    document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                    document.getElementById('connect-prompt').classList.add('hidden');
+
+                    if (activeAddress === operatorAddress) {
+                        document.getElementById('admin-badge').classList.remove('hidden');
+                        log('管理者権限を認識しました', 'success');
+                    }
+
+                    log(`接続完了: ${activeAddress}`, 'success');
+                    showToast('接続しました');
+                    updateBalance();
+                    renderProducts();
+                }
+                if (++retry > 10) {
+                    clearInterval(check);
+                    log('SSS拡張機能が見つかりません', 'error');
+                }
+            }, 500);
+        });
+
         // Direct Mode Logic
         function setAuthMode(mode) {
             authMode = mode;
