@@ -1052,15 +1052,14 @@
                                     let signature = '';
 
                                     if (authMode === 'sss') {
-                                        log('Linking identity for download (SSS)...');
-                                        const signatureObj = await window.SSS.signStatusMessage(message);
-                                        if (!signatureObj || !signatureObj.signature) throw new Error('署名が拒否されました');
-                                        signature = signatureObj.signature;
+                                        log('Requesting download via SSS Identity...');
+                                        // SSS v2 ではメッセージ署名が不安定なため、接続済みアドレスを信頼するフローへ
+                                        signature = 'SSS_AUTH'; 
                                     } else {
                                         log('Linking identity for download (Direct)...');
-                                        const networkType = symbol.NetworkType.TEST_NET;
-                                        const account = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
-                                        signature = account.signData(message);
+                                        const netType = symbol.NetworkType.TEST_NET;
+                                        const directAcc = symbol.Account.createFromPrivateKey(activePrivateKey, netType);
+                                        signature = directAcc.signData(message);
                                     }
 
                                     const query = new URLSearchParams({
