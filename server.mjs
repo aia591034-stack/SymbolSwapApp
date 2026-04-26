@@ -45,7 +45,7 @@ const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A
 // --- パス設定 (Vercel対応) ---
 const isVercel = process.env.VERCEL === '1';
 const rootDir = process.cwd();
-const publicDir = path.join(rootDir, 'public');
+const isVercel = process.env.VERCEL === '1';
 const uploadDir = isVercel ? '/tmp' : path.join(rootDir, 'uploads');
 
 if (!isVercel && !fs.existsSync(uploadDir)) {
@@ -53,9 +53,13 @@ if (!isVercel && !fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
+    destination: (req, file, cb) => {
+        // Vercel環境下でも確実に /tmp を指すように
+        cb(null, isVercel ? '/tmp' : uploadDir);
+    },
     filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
+
 const upload = multer({ storage });
 
 // --- ヘルパー ---
