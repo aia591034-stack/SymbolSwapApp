@@ -392,46 +392,10 @@ app.post('/api/announce_transaction', async (req, res) => {
     }
 });
 
-async function getProducts() {
-    try {
-        const data = await kv.get("products");
-        return data || [];
-    } catch (error) {
-        console.error("Vercel KV read error:", error);
-        return [];
-    }
-}
-
-app.get('/api/products', async (req, res) => {
-    try {
-        const products = await getProducts();
-        console.log(`[GET] Fetching products list. Count: ${products.length}`);
-        const safeProducts = products.map(p => {
-            const { secret, ...safeProduct } = p;
-            return safeProduct;
-        });
-        res.json(safeProducts);
-    } catch (error) {
-        console.error(`[ERROR] Products endpoint failed: ${error.message}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// 秘密情報(secret)をクライアントに送る。
-// 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
-async function saveProducts(products) {
-    try {
-        console.log(`[DEBUG] Writing to Vercel KV with key 'products'`);
-        await kv.set("products", products);
-        console.log("[DEBUG] Successfully wrote to Vercel KV.");
-    } catch (error) {
-        console.error("Vercel KV write error:", error);
-    }
-}
-
+// 購入者以外が秘密情報やファイルにアクセスできないように制限する
 app.get('/api/products/:id/secret', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = req.params.id;
         const requesterAddress = req.query.address; 
         
         console.log(`[GET] Fetching secret for product ID: ${id} (requested by: ${requesterAddress})`);
@@ -447,11 +411,13 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
-        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
+        const purchasedBy = await getPurchasedBy(id);
+        const isPurchased = purchasedBy.includes(requesterAddress);
+
+        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !isPurchased) {
              return res.json({ secret: "購入後に公開されます" });
         }
         
-        console.log(`[SUCCESS] Secret found for product ID ${id}`);
         res.json({ secret: product.secret });
     } catch (error) {
         console.error(`[ERROR] Secret endpoint failed: ${error.message}`);
@@ -461,7 +427,7 @@ app.get('/api/products/:id/secret', async (req, res) => {
 
 app.get('/api/products/:id/download', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
+        const id = req.params.id;
         const requesterAddress = req.query.address;
         
         const products = await getProducts();
@@ -473,18 +439,71 @@ app.get('/api/products/:id/download', async (req, res) => {
             return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
         }
 
+        const purchasedBy = await getPurchasedBy(id);
+        const isPurchased = purchasedBy.includes(requesterAddress);
+
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
+
+        if (!isPurchased && requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS) {
+            return res.status(403).json({ error: "この商品を購入していません。" });
+        }
+
         const secretStr = product.secret.replace('URL: ', '');
-        console.log(`[DEBUG - /api/products/:id/download] secretStr: ${secretStr}`);
         if (secretStr.startsWith('http')) {
-            // Pinata (IPFS) のURLの場合は直接リダイレクトする
-            console.log(`[INFO] Redirecting to IPFS gateway: ${secretStr}`);
             res.redirect(secretStr);
         } else {
-            // Pinata URLではない場合、ファイルが見つからないというエラーを返す
-            console.log(`[WARN] Non-IPFS URL or local path attempted for download: ${secretStr}`);
             res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
         }
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+
+
+
+app.get('/api/products', async (req, res) => {
+    try {
+        const products = await getProducts();
+        const requesterAddress = req.query.address;
+
+        console.log(`[GET] Fetching products list. Count: ${products.length} (requested by: ${requesterAddress || 'anonymous'})`);
+        const safeProducts = await Promise.all(products.map(async p => {
+            const { secret, ...safeProduct } = p;
+            let isPurchased = false;
+            if (requesterAddress) {
+                const purchasedBy = await getPurchasedBy(p.id);
+                isPurchased = purchasedBy.includes(requesterAddress);
+            }
+            return { ...safeProduct, isPurchased };
+        }));
+        res.json(safeProducts);
+    } catch (error) {
+        console.error(`[ERROR] Products endpoint failed: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 購入完了をサーバーに通知するエンドポイント
+app.post('/api/products/:id/purchase_confirm', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { address, transactionHash } = req.body;
+
+        if (!address || !transactionHash) {
+            return res.status(400).json({ error: "Address and TransactionHash are required" });
+        }
+
+        // 本来はここでオンチェーンのトランザクションを確認すべきだが、
+        // まずは簡易的に履歴を保存する
+        await addPurchaseRecord(id, address);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Purchase confirm error:", error);
         res.status(500).json({ error: error.message });
     }
 });
