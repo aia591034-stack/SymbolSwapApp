@@ -186,24 +186,21 @@ const toBigInt = (val) => {
 };
 
 /**
- * オンチェーンで購入履歴を確認する
+ * オンチェーンで購入履歴を確認する (内部実行用)
  */
-async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
+async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
     try {
         const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
         const cleanSeller = (sellerAddress || '').replace(/-/g, '').toUpperCase();
-        const cleanCurrencyId = (CURRENCY_ID || '').toUpperCase();
+        const cleanCurrencyId = (CURRENCY_ID || '').replace(/^0X/i, '').toUpperCase();
         const targetAmount = BigInt(Math.round(Number(amount) * 1000000));
 
-        console.log(`[VERIFY] Start: Buyer=${cleanBuyer}, Seller=${cleanSeller}, Amount=${targetAmount} (raw)`);
-        
         const endpoints = [
-            `${NODE_URL}/accounts/${cleanBuyer}/transactions/unconfirmed?pageSize=20`,
-            `${NODE_URL}/accounts/${cleanBuyer}/transactions/confirmed?pageSize=20`
+            `${NODE_URL}/accounts/${cleanBuyer}/transactions/unconfirmed?pageSize=50`,
+            `${NODE_URL}/accounts/${cleanBuyer}/transactions/confirmed?pageSize=50`
         ];
 
         for (const url of endpoints) {
-            console.log(`[VERIFY] Fetching: ${url}`);
             const res = await fetch(url);
             if (!res.ok) continue;
             const data = await res.json();
@@ -213,55 +210,64 @@ async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, produc
                 const tx = txWrapper.transaction;
                 if (!tx) continue;
                 
-                // 照合対象となるEmbedded Transactionを探す関数
                 const isMatchingTransfer = (e) => {
-                    if (!e || e.type !== 16717) return false;
-                    const recipient = (e.recipientAddress || e.recipient || '').replace(/-/g, '').toUpperCase();
-                    if (recipient !== cleanSeller) return false;
-
-                    const hasAmount = e.mosaics && e.mosaics.some(m => {
-                        const mId = (m.id || '').toUpperCase();
+                    if (!e || (e.type !== 16717 && e.type !== 'TRANSFER')) return false;
+                    
+                    // 宛先の抽出
+                    let recipient = (e.recipientAddress || e.recipient || '');
+                    if (typeof recipient === 'object' && recipient.address) recipient = recipient.address;
+                    const cleanRecipient = String(recipient).replace(/-/g, '').toUpperCase();
+                    
+                    // モザイクと金額の抽出
+                    const mosaics = e.mosaics || [];
+                    const hasAmount = mosaics.some(m => {
+                        const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
                         return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
                     });
-                    if (!hasAmount) return false;
 
-                    // メッセージの照合 (もしあれば)
-                    if (e.message) {
-                        try {
-                            const msgStr = Buffer.from(e.message.substring(2), 'hex').toString('utf-8');
-                            console.log(`[VERIFY] Found Tx Message: "${msgStr}"`);
-                            if (msgStr.includes(productTitle) || msgStr.includes("Nexus Swap")) return true;
-                        } catch (err) {
-                            console.warn("[VERIFY] Message decode fail, but amount matches.");
-                        }
-                    }
-                    
-                    // 金額と宛先が一致していれば、メッセージのデコードに失敗しても一旦OKとする
-                    return true;
+                    // デバッグ用: 全ての送金トランザクションをログに出す
+                    console.log(`[CHECK] Found Transfer: To=${cleanRecipient}, Mosaics=${JSON.stringify(mosaics)}`);
+
+                    if (cleanRecipient === cleanSeller && hasAmount) return true;
+                    return false;
                 };
 
-                // Aggregate Transaction
+                // Aggregate
                 if (tx.type === 16705 || tx.type === 16961) {
-                    const paymentTx = (tx.transactions || []).find(etx => isMatchingTransfer(etx.transaction));
-                    if (paymentTx) {
-                        console.log(`[VERIFY] SUCCESS: Found matching payment in Aggregate Tx (${txWrapper.meta.hash || 'unconfirmed'})`);
-                        return true;
-                    }
+                    const embedded = tx.transactions || [];
+                    if (embedded.some(etx => isMatchingTransfer(etx.transaction))) return true;
                 }
                 
-                // Simple Transfer
-                if (isMatchingTransfer(tx)) {
-                    console.log(`[VERIFY] SUCCESS: Found matching simple Transfer Tx (${txWrapper.meta.hash || 'unconfirmed'})`);
-                    return true;
-                }
+                // Simple
+                if (isMatchingTransfer(tx)) return true;
             }
         }
-        console.log(`[VERIFY] FAILED: No matching transaction found for ${cleanBuyer} -> ${cleanSeller}`);
         return false;
     } catch (e) {
-        console.error("[VERIFY] Critical Error:", e);
+        console.error("[VERIFY_ONCE] Error:", e);
         return false;
     }
+}
+
+/**
+ * 購入履歴を検証する (リトライ機能付き)
+ */
+async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
+    console.log(`[VERIFY] Start logic for ${buyerAddress} -> ${sellerAddress} (${amount} XYM)`);
+    const maxRetries = 4;
+    for (let i = 0; i < maxRetries; i++) {
+        const found = await _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle);
+        if (found) {
+            console.log(`[VERIFY] SUCCESS on attempt ${i + 1}`);
+            return true;
+        }
+        if (i < maxRetries - 1) {
+            console.log(`[VERIFY] Not found on attempt ${i + 1}. Retrying in 2.5s...`);
+            await new Promise(r => setTimeout(r, 2500));
+        }
+    }
+    console.log(`[VERIFY] FAILED after ${maxRetries} attempts.`);
+    return false;
 }
 
 // Vercel等のDBがない環境用の一時的な保存先
