@@ -8,18 +8,17 @@ const kvToken = process.env.KV_REST_API_TOKEN;
 
 let cleanedKvUrl = undefined;
 if (kvUrl) {
+    // まず認証情報を削除し、rediss:// を https:// に変換
+    let tempUrl = kvUrl.replace(/^rediss?:\/\/[^@]*@/, "https://"); // 認証情報とスキームを変換
     try {
-        const url = new URL(kvUrl);
-        // 認証情報を削除
+        const url = new URL(tempUrl);
+        // 念のためusernameとpasswordを再度クリア
         url.username = "";
         url.password = "";
-        // スキームを https に変更
-        url.protocol = "https:";
         cleanedKvUrl = url.toString();
     } catch (e) {
-        console.error("Error parsing KV_URL:", e);
-        // URLパースエラーのフォールバックとして、rediss?:// を https:// に置換
-        cleanedKvUrl = kvUrl.replace(/^rediss?:\/\//, "https://");
+        console.error("Error processing KV_URL after initial cleanup:", e);
+        cleanedKvUrl = tempUrl; // パース失敗の場合は変換済みのURLを使用
     }
 }
 
