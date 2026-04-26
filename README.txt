@@ -97,3 +97,4 @@ node swap.js
 - 「Invalid Signature」エラーが出る：
   秘密鍵と公開鍵のペアが正しくないか、ネットワークタイプ（Testnet/Mainnet）の
   指定が間違っている可能性があります。 
+　
