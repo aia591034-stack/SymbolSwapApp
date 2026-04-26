@@ -381,15 +381,7 @@ app.post('/api/announce_transaction', async (req, res) => {
 
 function getProducts() {
     try {
-        if (process.env.VERCEL) {
-            // data.json の初期データとメモリ内のデータを合体させる
-            let initialProducts = [];
-            if (fs.existsSync(DB_FILE)) {
-                const data = JSON.parse(fs.readFileSync(DB_FILE));
-                initialProducts = data.products || [];
-            }
-            return [...initialProducts, ...memoryProducts];
-        }
+
 
         if (!fs.existsSync(DB_FILE)) {
             return [];
@@ -420,19 +412,7 @@ app.get('/api/products', (req, res) => {
 // 秘密情報(secret)をクライアントに送る。
 // 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
 function saveProducts(products) {
-    if (process.env.VERCEL) {
-        // Vercelではファイルに書けないのでメモリに保存
-        // 既存の data.json にない新規追加分のみを抽出して保持
-        let initialIds = [];
-        try {
-            if (fs.existsSync(DB_FILE)) {
-                const data = JSON.parse(fs.readFileSync(DB_FILE));
-                initialIds = (data.products || []).map(p => p.id);
-            }
-        } catch (e) {}
-        memoryProducts = products.filter(p => !initialIds.includes(p.id));
-        return;
-    }
+
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify({ products }, null, 2));
     } catch (error) {
