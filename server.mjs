@@ -5,11 +5,10 @@ import path from 'path';
 import multer from 'multer';
 import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
+import * as symbolSdkModule from 'symbol-sdk';
 
-// ESM環境で require を使用可能にする (Symbol SDK v3 の確実な読み込みのため)
-const require = createRequire(import.meta.url);
-const symbolSdk = require('symbol-sdk');
+// 環境によって export のされ方が異なる場合に対応
+const symbolSdk = symbolSdkModule.default || symbolSdkModule;
 const {
     PrivateKey,
     PublicKey,
