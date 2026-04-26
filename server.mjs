@@ -468,15 +468,15 @@ app.get('/api/products/:id/download', async (req, res) => {
 app.get('/api/products', async (req, res) => {
     try {
         const products = await getProducts();
+        console.log("[DEBUG] Products fetched from KV:", products);
         const requesterAddress = req.query.address;
 
-        console.log(`[GET] Fetching products list. Count: ${products.length} (requested by: ${requesterAddress || 'anonymous'})`);
         const safeProducts = await Promise.all(products.map(async p => {
             const { secret, ...safeProduct } = p;
             let isPurchased = false;
             if (requesterAddress) {
                 const purchasedBy = await getPurchasedBy(p.id);
-                isPurchased = purchasedBy.includes(requesterAddress);
+                isPurchased = Array.isArray(purchasedBy) ? purchasedBy.includes(requesterAddress) : false;
             }
             return { ...safeProduct, isPurchased };
         }));
