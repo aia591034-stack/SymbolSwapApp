@@ -192,10 +192,10 @@ const toBigInt = (val) => {
 app.post('/api/purchase_sss', async (req, res) => {
     try {
         console.log(`[DEBUG - /api/purchase_sss] Received signedPayload: ${req.body.signedPayload ? req.body.signedPayload.substring(0, 100) + '...' : 'null'}`);
-        const { signedPayload, productId, buyerPublicKey } = req.body;
-        if (!signedPayload || !productId || !buyerPublicKey) {
-            console.error("[ERROR - /api/purchase_sss] Signed payload, productId or buyerPublicKey is missing.");
-            return res.status(400).json({ error: "署名済みデータ、商品ID、または購入者公開鍵がありません" });
+        const { signedPayload } = req.body;
+        if (!signedPayload) {
+            console.error("[ERROR - /api/purchase_sss] Signed payload is missing.");
+            return res.status(400).json({ error: "署名済みデータがありません" });
         }
 
         console.log(`[DEBUG - /api/purchase_sss] Sending transaction to node: ${NODE_URL}/transactions`);
@@ -429,29 +429,6 @@ async function saveProducts(products) {
     }
 }
 
-// 新しいヘルパー関数：購入者情報を記録
-async function recordPurchase(productId, buyerPublicKey) {
-    try {
-        const key = `purchased_by:${productId}`;
-        await kv.sadd(key, buyerPublicKey); // セットに購入者公開鍵を追加
-        console.log(`[INFO] Purchase recorded for product ${productId} by ${buyerPublicKey}`);
-    } catch (error) {
-        console.error(`[ERROR] Failed to record purchase for product ${productId}:`, error);
-    }
-}
-
-// ヘルパー関数：購入者情報を取得
-async function getPurchasedBy(productId) {
-    try {
-        const key = `purchased_by:${productId}`;
-        const buyers = await kv.smembers(key); // セットの全メンバーを取得
-        return buyers || [];
-    } catch (error) {
-        console.error(`[ERROR] Failed to get purchasers for product ${productId}:`, error);
-        return [];
-    }
-}
-
 app.get('/api/products/:id/secret', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -470,15 +447,7 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
         const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
 
-        // 購入者リストを取得
-        const purchasedBy = await getPurchasedBy(id);
-
-        // requesterAddress が販売者、運営者、または購入者の一人であるかをチェック
-        const hasAccess = requesterAddress === product.sellerAddress || 
-                          requesterAddress === OPERATOR_ADDRESS ||
-                          purchasedBy.includes(requesterAddress);
-
-        if (!hasAccess) {
+        if (requesterAddress !== product.sellerAddress && requesterAddress !== OPERATOR_ADDRESS && !requesterAddress) {
              return res.json({ secret: "購入後に公開されます" });
         }
         
@@ -500,20 +469,8 @@ app.get('/api/products/:id/download', async (req, res) => {
         
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
-        const operatorKeyPair = new KeyPair(operatorPrivateKey);
-        const OPERATOR_ADDRESS = facade.network.publicKeyToAddress(operatorKeyPair.publicKey).toString();
-
-        // 購入者リストを取得
-        const purchasedBy = await getPurchasedBy(id);
-
-        // requesterAddress が販売者、運営者、または購入者の一人であるかをチェック
-        const hasAccess = requesterAddress === product.sellerAddress || 
-                          requesterAddress === OPERATOR_ADDRESS ||
-                          purchasedBy.includes(requesterAddress);
-
-        if (!hasAccess) {
-            return res.status(403).json({ error: "ダウンロード権限がありません。" });
+        if (!requesterAddress) {
+            return res.status(403).json({ error: "ダウンロード権限がありません。ウォレットを接続してください。" });
         }
 
         const secretStr = product.secret.replace('URL: ', '');
