@@ -1248,12 +1248,6 @@
                     window.SSS.setTransaction(aggregateTx);
                     signedTx = await window.SSS.requestSign();
                 } else {
-                    const buyerAccount = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
-                    // 運営(A)の署名が必要なため、一度ペイロードをサーバーに送って運営の署名をもらうか、
-                    // またはSSSと同様にアグリゲートとして完結させる。
-                    // ここではSSSの挙動に合わせ、運営の署名が含まれた状態のトランザクションを構築する。
-                    // 実際には /api/build_transaction を使うのが確実。
-                    
                     // サーバーから構築済みのアグリゲートペイロードを取得
                     const buildRes = await fetch('/api/build_transaction', {
                         method: 'POST',
@@ -1267,15 +1261,14 @@
                     if (!buildData.success) throw new Error(buildData.error || '構築失敗');
                     const payload = buildData.payload;
                     const hash = buildData.hash;
-                    
+
                     log('Cosigning transaction (Direct)...');
-                    const networkType = symbol.NetworkType.TEST_NET;
-                    const buyerAccount = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
-                    
+                    const currentNetworkType = symbol.NetworkType.TEST_NET;
+                    const bAccount = symbol.Account.createFromPrivateKey(activePrivateKey, currentNetworkType);
+
                     // アグリゲートハッシュに対して署名（コサイン署名）を作成
-                    // SDK v2: CosignatureTransaction は hash を必要とする
-                    const cosignature = buyerAccount.signCosignatureTransaction({ hash: hash });
-                    
+                    const cosignature = bAccount.signCosignatureTransaction({ hash: hash });
+
                     // サーバー側でコサイン署名を結合してアナウンスする
                     const announceRes = await fetch('/api/announce_transaction', {
                         method: 'POST',
@@ -1290,10 +1283,9 @@
                     });
                     const announceData = await announceRes.json();
                     if (!announceData.success) throw new Error(announceData.error);
-                    
+
                     signedTx = { hash: announceData.hash };
                 }
-
                 if (authMode === 'sss') {
                     if (!signedTx?.payload) throw new Error('Protocol rejected by user');
                     showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
