@@ -637,8 +637,8 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
         console.log("[DEBUG] Products save attempt completed.");
         res.json({ success: true, product: newProduct });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error("[SERVER ERROR - /api/products]:", error); // 詳細なログを追加
+        res.status(500).json({ success: false, error: error.message, stack: error.stack }); // stack を追加して詳細化
     }
 });
 
