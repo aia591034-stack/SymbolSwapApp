@@ -7,18 +7,18 @@ import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
 import * as symbolSdkModule from 'symbol-sdk';
 
-// Symbol SDK v3 のエクスポート構造の違いを吸収するヘルパー
-const getSdkClass = (name) => {
-    if (symbolSdkModule[name]) return symbolSdkModule[name];
-    if (symbolSdkModule.default && symbolSdkModule.default[name]) return symbolSdkModule.default[name];
-    return undefined;
-};
+/**
+ * Symbol SDK v3 を Vercel 環境で確実に読み込むための処理
+ */
+const SDK = symbolSdkModule.SymbolFacade ? symbolSdkModule : (symbolSdkModule.default || symbolSdkModule);
 
-const SymbolFacade = getSdkClass('SymbolFacade');
-const PrivateKey = getSdkClass('PrivateKey');
-const PublicKey = getSdkClass('PublicKey');
-const Signature = getSdkClass('Signature');
-const utils = getSdkClass('utils');
+const {
+    PrivateKey,
+    PublicKey,
+    Signature,
+    SymbolFacade,
+    utils
+} = SDK;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,18 +34,23 @@ const kv = createClient({
 app.use(cors());
 app.use(express.json());
 
-// 初期化の安全性を確認
-let facade;
-if (SymbolFacade) {
-    facade = new SymbolFacade('testnet');
-}
-
+// ネットワーク定数
 const CURRENCY_ID = '72C0212E67A08BCE'; 
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
+const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC';
 
-const accounts = {
-    A: { name: 'A (Operator)', key: process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC' },
-};
+// Facade の初期化
+let facade;
+try {
+    if (SymbolFacade) {
+        facade = new SymbolFacade('testnet');
+        console.log("[INIT] SymbolFacade initialized successfully.");
+    } else {
+        console.error("[INIT] SymbolFacade class not found in SDK.");
+    }
+} catch (e) {
+    console.error("[INIT] SymbolFacade initialization failed:", e);
+}
 
 const toBigInt = (val) => {
     if (typeof val === 'bigint') return val;
@@ -54,6 +59,9 @@ const toBigInt = (val) => {
     return BigInt(cleanHex);
 };
 
+/**
+ * 購入確認ロジック (Unconfirmed/Confirmed 両対応)
+ */
 async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
     try {
         const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
@@ -114,6 +122,7 @@ async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, produc
     return false;
 }
 
+// ファイルアップロード設定
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -134,26 +143,53 @@ async function saveProducts(products) {
     await kv.set("products", products);
 }
 
+// --- API ルート ---
+
+app.get('/api/config', (req, res) => {
+    try {
+        if (!facade || !PrivateKey) throw new Error("Symbol SDK not properly initialized");
+        const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
+        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+        res.json({ 
+            operatorPublicKey: opPubKey.toString(), 
+            currencyId: CURRENCY_ID,
+            status: "ready"
+        });
+    } catch (e) {
+        console.error("/api/config error:", e);
+        res.status(500).json({ error: e.message, stack: e.stack });
+    }
+});
+
 app.get('/api/products', async (req, res) => {
-    const products = await getProducts();
-    res.json(products.map(({ secret, ...p }) => p));
+    try {
+        const products = await getProducts();
+        res.json(products.map(({ secret, ...p }) => p));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/api/products/:id/secret', async (req, res) => {
-    const { address } = req.query;
-    const products = await getProducts();
-    const p = products.find(prod => String(prod.id) === String(req.params.id));
-    if (!p) return res.status(404).json({ error: "Not found" });
+    try {
+        const { address } = req.query;
+        const products = await getProducts();
+        const p = products.find(prod => String(prod.id) === String(req.params.id));
+        if (!p) return res.status(404).json({ error: "Not found" });
 
-    const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
-    const opPubKey = facade.network.publicKeyToAddress(facade.createPublicKeysFromPrivateKeys(opPrivKey)).toString();
+        const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
+        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+        const opAddr = facade.network.publicKeyToAddress(opPubKey).toString();
 
-    const isAuthorized = (address === p.sellerAddress || address === opPubKey);
-    if (!isAuthorized && address) {
-        const purchased = await verifyPurchaseOnChain(address, p.sellerAddress, p.price, p.title);
-        if (purchased) return res.json({ secret: p.secret });
+        const isAuthorized = (address === p.sellerAddress || address === opAddr);
+        if (!isAuthorized && address) {
+            const purchased = await verifyPurchaseOnChain(address, p.sellerAddress, p.price, p.title);
+            if (purchased) return res.json({ secret: p.secret });
+        }
+        res.json({ secret: isAuthorized ? p.secret : "購入後に公開されます" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    res.json({ secret: isAuthorized ? p.secret : "購入後に公開されます" });
 });
 
 app.get('/api/products/:id/download', async (req, res) => {
@@ -164,9 +200,9 @@ app.get('/api/products/:id/download', async (req, res) => {
         const product = products.find(p => String(p.id) === String(id));
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
-        const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
-        const opPubKeyObj = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-        const OP_ADDR = facade.network.publicKeyToAddress(opPubKeyObj).toString();
+        const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
+        const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+        const OP_ADDR = facade.network.publicKeyToAddress(opPubKey).toString();
 
         let isAuthorized = (address === product.sellerAddress || address === OP_ADDR);
 
@@ -231,8 +267,10 @@ app.post('/api/build_transaction', async (req, res) => {
         const { productId, buyerPublicKey } = req.body;
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(productId));
-        const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
+        
+        const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+
         const tx1 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: new PublicKey(utils.hexToUint8(buyerPublicKey)),
@@ -282,25 +320,16 @@ app.post('/api/announce_transaction', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/config', (req, res) => {
-    const opPrivKey = new PrivateKey(utils.hexToUint8(process.env.OPERATOR_PRIVATE_KEY || accounts.A.key));
-    const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-    res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID });
-});
-
-// Static files
+// 静的ファイルの提供
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 app.use('/uploads', express.static(uploadDir));
 
-// Root route (Vercelで確実に index.html を返すための設定)
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-// Start server
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
 }
 export default app;
-
