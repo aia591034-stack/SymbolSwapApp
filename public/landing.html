@@ -1,72 +1,69 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AETHER MARKET | 次世代アセット取引基盤</title>
+    <title>AETHER MARKET | 次世代デジタルアセット取引基盤</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-        }
-
-        .art-shape {
-            width: 200px;
-            height: 200px;
-            background: linear-gradient(45deg, #6366f1, #c084fc);
-            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-            animation: rotate 10s linear infinite;
-        }
-
-        @keyframes rotate {
-            from {
-                transform: rotate(0deg);
-            }
-
-            to {
-                transform: rotate(360deg);
-            }
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap');
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #050505; color: #f8fafc; }
+        .gradient-text { background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
     </style>
 </head>
+<body>
 
-<body class="bg-slate-950 text-white font-sans">
-
-    <header class="gradient-bg min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <div class="art-shape mb-10 shadow-[0_0_50px_rgba(99,102,241,0.5)]"></div>
-        <h1 class="text-5xl md:text-7xl font-black tracking-tighter mb-6">
-            信頼不要の<br /><span class="text-indigo-400">デジタルアセット取引</span>
+    <!-- ヘッダー -->
+    <header class="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <h1 class="text-5xl md:text-7xl font-black mb-8 tracking-tighter leading-tight">
+            仲介者はいらない。<br/>
+            <span class="gradient-text">真の所有権</span>をあなたの手に。
         </h1>
-        <p class="text-lg text-slate-400 max-w-2xl mb-10">
-            AETHER MARKETは、Symbolブロックチェーン技術を用いて、クリエイターとファンが「仲介なし」で直接、安全にアセットを交換できる次世代マーケットプレイスです。
+        <p class="text-xl text-slate-400 max-w-2xl mb-12">
+            AETHER MARKETは、Symbolブロックチェーンを活用した、信頼不要（トラストレス）なデジタルアセット売買プラットフォームです。
         </p>
-        <a href="/"
-            class="bg-indigo-600 hover:bg-indigo-500 px-10 py-4 rounded-full font-bold text-lg transition shadow-lg">マーケットプレイスに入る</a>
+        <div class="flex flex-col sm:flex-row gap-4">
+            <a href="/" class="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-2xl font-bold transition">マーケットプレイスに入る</a>
+            <a href="#about" class="bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-2xl font-bold transition">詳しく知る</a>
+        </div>
     </header>
 
-    <section class="py-24 px-6 max-w-5xl mx-auto grid md:grid-cols-3 gap-12">
-        <div class="p-8 border border-slate-800 rounded-3xl bg-slate-900/50">
-            <div class="text-4xl mb-4">🛡️</div>
-            <h3 class="text-xl font-bold mb-2">詐欺ゼロの保証</h3>
-            <p class="text-slate-400">アトミックスワップにより、支払いと商品の受け渡しを同時に実行。どちらかが欠けることはありません。</p>
-        </div>
-        <div class="p-8 border border-slate-800 rounded-3xl bg-slate-900/50">
-            <div class="text-4xl mb-4">💎</div>
-            <h3 class="text-xl font-bold mb-2">NFT所有権の直結</h3>
-            <p class="text-slate-400">データに所有権を紐付け。コピーではなく「唯一無二の資産」として売買・管理が可能です。</p>
-        </div>
-        <div class="p-8 border border-slate-800 rounded-3xl bg-slate-900/50">
-            <div class="text-4xl mb-4">📱</div>
-            <h3 class="text-xl font-bold mb-2">スマホ完全対応</h3>
-            <p class="text-slate-400">専用アプリ不要。秘密鍵対応により、どこからでも安全に取引に参加できます。</p>
+    <!-- 特徴セクション -->
+    <section id="about" class="py-24 px-6 max-w-6xl mx-auto">
+        <h2 class="text-4xl font-black text-center mb-16">選ばれる4つの理由</h2>
+        <div class="grid md:grid-cols-2 gap-8">
+            <div class="glass p-8 rounded-3xl">
+                <h3 class="text-2xl font-bold mb-4 text-indigo-400">詐欺リスクをゼロに</h3>
+                <p class="text-slate-400 leading-relaxed">
+                    従来のエスクローサービスや仲介者は不要です。アトミックスワップ技術により、代金とアセットの交換がシステム上で同時に完結します。「払ったのに届かない」「送ったのに支払われない」といったリスクを物理的に排除しました。
+                </p>
+            </div>
+            <div class="glass p-8 rounded-3xl">
+                <h3 class="text-2xl font-bold mb-4 text-purple-400">NFT所有権の統合</h3>
+                <p class="text-slate-400 leading-relaxed">
+                    単なるファイルの受け渡しだけでなく、NFT技術を用いて所有権を完全に移転できます。デジタルデータの「原本性」をブロックチェーンが証明し、二次流通でもクリエイターへの還元が可能です。
+                </p>
+            </div>
+            <div class="glass p-8 rounded-3xl">
+                <h3 class="text-2xl font-bold mb-4 text-pink-400">スマホ完全対応</h3>
+                <p class="text-slate-400 leading-relaxed">
+                    PCの拡張機能は不要です。秘密鍵による署名に対応しているため、スマホのブラウザから直接アセットの出品、売買、そしてセキュアなダウンロードが完結します。
+                </p>
+            </div>
+            <div class="glass p-8 rounded-3xl">
+                <h3 class="text-2xl font-bold mb-4 text-emerald-400">購入者限定アクセス</h3>
+                <p class="text-slate-400 leading-relaxed">
+                    購入したファイルは、購入したアドレスの秘密鍵で署名しないとダウンロードできません。サーバーサイドでオンチェーン検証を行うため、URLが流出しても他人は中身を見ることができません。
+                </p>
+            </div>
         </div>
     </section>
 
-    <footer class="text-center py-12 text-slate-600 text-sm">
-        © 2026 AETHER MARKET - Trustless Exchange Protocol
+    <!-- フッター -->
+    <footer class="py-12 text-center border-t border-white/5 text-slate-600">
+        <p>&copy; 2026 AETHER MARKET - Decentralized Asset Exchange</p>
     </footer>
 
 </body>
-
 </html>
