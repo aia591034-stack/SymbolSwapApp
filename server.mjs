@@ -1,6 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
+import { createClient } from '@vercel/kv';
+
+const kv = createClient({
+    url: process.env.VERCEL_KV_URL,
+    token: process.env.VERCEL_KV_REST_API_TOKEN,
+});
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
@@ -85,7 +91,7 @@ app.get('/api/test', (req, res) => {
     });
 });
 
-const DB_FILE = path.join(__dirname, 'data.json');
+
 
 // --- Pinata (IPFS) 設定 ---
 const PINATA_API_KEY = process.env.PINATA_API_KEY || ''; 
@@ -173,7 +179,7 @@ const toBigInt = (val) => {
 };
 
 // Vercel等のDBがない環境用の一時的な保存先
-let memoryProducts = [];
+
 
 // SSS連携: クライアントから「部分署名済みのアグリゲートトランザクション」を受け取り、運営(A)がアナウンスするエンドポイント
 app.post('/api/purchase_sss', async (req, res) => {
@@ -222,7 +228,7 @@ app.post('/api/build_transaction', async (req, res) => {
             return res.status(400).json({ error: "商品IDまたは公開鍵が不足しています" });
         }
 
-        const products = getProducts();
+        const products = await getProducts();
         // IDの型（数値/文字列）に関わらず比較できるように修正
         const p = products.find(item => item.id.toString() === productId.toString());
         
@@ -379,24 +385,19 @@ app.post('/api/announce_transaction', async (req, res) => {
     }
 });
 
-function getProducts() {
+async function getProducts() {
     try {
-
-
-        if (!fs.existsSync(DB_FILE)) {
-            return [];
-        }
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        return data.products || [];
+        const data = await kv.get("products");
+        return data || [];
     } catch (error) {
-        console.error("Database read error:", error);
+        console.error("Vercel KV read error:", error);
         return [];
     }
 }
 
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
     try {
-        const products = getProducts();
+        const products = await getProducts();
         console.log(`[GET] Fetching products list. Count: ${products.length}`);
         const safeProducts = products.map(p => {
             const { secret, ...safeProduct } = p;
@@ -411,23 +412,24 @@ app.get('/api/products', (req, res) => {
 
 // 秘密情報(secret)をクライアントに送る。
 // 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
-function saveProducts(products) {
-
+async function saveProducts(products) {
     try {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ products }, null, 2));
+        console.log(`[DEBUG] Writing to Vercel KV with key 'products'`);
+        await kv.set("products", products);
+        console.log("[DEBUG] Successfully wrote to Vercel KV.");
     } catch (error) {
-        console.error("Database write error:", error);
+        console.error("Vercel KV write error:", error);
     }
 }
 
-app.get('/api/products/:id/secret', (req, res) => {
+app.get('/api/products/:id/secret', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const requesterAddress = req.query.address; 
         
         console.log(`[GET] Fetching secret for product ID: ${id} (requested by: ${requesterAddress})`);
         
-        const products = getProducts();
+        const products = await getProducts();
         const product = products.find(p => String(p.id) === String(id));
         
         if (!product) {
@@ -450,12 +452,12 @@ app.get('/api/products/:id/secret', (req, res) => {
     }
 });
 
-app.get('/api/products/:id/download', (req, res) => {
+app.get('/api/products/:id/download', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const requesterAddress = req.query.address;
         
-        const products = getProducts();
+        const products = await getProducts();
         const product = products.find(p => String(p.id) === String(id));
         
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
@@ -530,7 +532,7 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 
         console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, using IPFS: ${!!ipfsUrl}`);
 
-        const products = getProducts();
+        const products = await getProducts();
         const newProduct = {
             id: Date.now(),
             title,
@@ -545,8 +547,10 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             mosaicId: mosaicId || null,
             secret: `URL: ${secretUrl}`
         };
+        console.log("[DEBUG] Attempting to save products...");
         products.push(newProduct);
-        saveProducts(products);
+        await saveProducts(products);
+        console.log("[DEBUG] Products save attempt completed.");
         res.json({ success: true, product: newProduct });
     } catch (error) {
         console.error(error);
@@ -555,11 +559,11 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
 });
 
 // 商品の編集
-app.patch('/api/products/:id', (req, res) => {
+app.patch('/api/products/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { title, price, description, imageUrl, requesterAddress, saleType, mosaicId } = req.body;
-        const products = getProducts();
+        const products = await getProducts();
         const index = products.findIndex(p => p.id === id);
 
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
@@ -580,7 +584,7 @@ app.patch('/api/products/:id', (req, res) => {
         if (saleType) product.saleType = saleType;
         if (mosaicId) product.mosaicId = mosaicId;
 
-        saveProducts(products);
+        await saveProducts(products);
         res.json({ success: true, product });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -588,11 +592,11 @@ app.patch('/api/products/:id', (req, res) => {
 });
 
 // 商品の削除
-app.delete('/api/products/:id', (req, res) => {
+app.delete('/api/products/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { requesterAddress } = req.body;
-        const products = getProducts();
+        const products = await getProducts();
         const index = products.findIndex(p => p.id === id);
 
         if (index === -1) return res.status(404).json({ error: "商品が見つかりません" });
@@ -607,7 +611,7 @@ app.delete('/api/products/:id', (req, res) => {
         }
 
         products.splice(index, 1);
-        saveProducts(products);
+        await saveProducts(products);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });

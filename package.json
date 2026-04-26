@@ -16,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@vercel/kv": "^3.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "multer": "^2.1.1",
