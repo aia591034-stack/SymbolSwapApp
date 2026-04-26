@@ -1135,73 +1135,112 @@
         }
 
         async function buyProduct(p) {
-            if (!activeAddress) return showToast('Link wallet to proceed');
+            if (!activeAddress) return showToast('ウォレットを接続してください');
 
-            showSwapOverlay('Initializing Protocol', 'アセットと通貨の同時交換を開始しています...', 10);
-            document.getElementById('node-buyer').classList.add('active');
-
-            log(`Initiating swap protocol: ${p.title}`);
-            try {
-                const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
-                if (!secretRes.ok) throw new Error('Failed to retrieve asset data');
-                const { secret } = await secretRes.json();
-
-                const configRes = await fetch('/api/config');
-                const config = await configRes.json();
-                const networkType = symbol.NetworkType.TEST_NET;
-
-                const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
-                const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
-                const epochAdjustment = 1667250467;
-
-                showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
-
-                const txPayment = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    sellerAccount.address,
-                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
-                    symbol.PlainMessage.create('Nexus Swap: ' + p.title),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const txData = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    buyerAccount.address,
-                    [],
-                    symbol.PlainMessage.create(secret),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment),
-                    [txPayment, txData],
-                    networkType,
-                    [],
-                    symbol.UInt64.fromUint(1000000)
-                );
-
-                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                window.SSS.setTransaction(aggregateTx);
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx?.payload) throw new Error('Protocol rejected by user');
-
-                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
-                const res = await fetch('/api/purchase_sss', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ signedPayload: signedTx.payload })
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    log('Transaction broadcasted', 'success');
-                    checkStatus(signedTx.hash, activeAddress, p);
-                } else {
-                    throw new Error(data.error);
+            // 秘密鍵モードかどうかを判定
+            if (authMode === 'direct') {
+                // --- 秘密鍵モードの購入フロー ---
+                try {
+                    showSwapOverlay('署名中', '秘密鍵で署名しています...', 30);
+                    
+                    // 1. トランザクション構築
+                    const buildRes = await fetch('/api/build_transaction', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ productId: p.id, buyerPublicKey: activePublicKey })
+                    });
+                    const buildData = await buildRes.json();
+                    if (!buildData.success) throw new Error(buildData.error);
+                    
+                    // 2. 秘密鍵で署名 (Symbol SDK v2のアカウント機能を使用)
+                    const account = symbol.Account.createFromPrivateKey(activePrivateKey, symbol.NetworkType.TEST_NET);
+                    const signature = account.signData(buildData.hash);
+                    
+                    // 3. サーバーへ署名をアナウンス
+                    const announceRes = await fetch('/api/announce_transaction', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ 
+                            payload: buildData.payload,
+                            cosignatures: [{ signerPublicKey: activePublicKey, signature: signature }]
+                        })
+                    });
+                    
+                    if (announceRes.ok) {
+                        checkStatus(buildData.hash, activeAddress, p);
+                    } else {
+                        throw new Error('取引アナウンスに失敗しました');
+                    }
+                } catch(e) {
+                    log(e, 'error');
+                    hideSwapOverlay();
                 }
-            } catch (e) {
-                log(e, 'error');
-                hideSwapOverlay();
+            } else {
+                // --- SSSモードの購入フロー ---
+                showSwapOverlay('処理中', 'SSSで署名してください...', 30);
+                document.getElementById('node-buyer').classList.add('active');
+
+                log(`取引を開始: ${p.title}`);
+                try {
+                    const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
+                    if (!secretRes.ok) throw new Error('アセット情報の取得に失敗しました');
+                    const { secret } = await secretRes.json();
+
+                    const configRes = await fetch('/api/config');
+                    const config = await configRes.json();
+                    const networkType = symbol.NetworkType.TEST_NET;
+
+                    const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
+                    const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
+                    const epochAdjustment = 1667250467;
+
+                    showSwapOverlay('構築中', 'アグリゲートトランザクションを構築中...', 50);
+
+                    const txPayment = symbol.TransferTransaction.create(
+                        symbol.Deadline.create(epochAdjustment),
+                        sellerAccount.address,
+                        [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
+                        symbol.PlainMessage.create('Nexus Swap: ' + p.title),
+                        networkType
+                    ).toAggregate(buyerAccount);
+
+                    const txData = symbol.TransferTransaction.create(
+                        symbol.Deadline.create(epochAdjustment),
+                        buyerAccount.address,
+                        [],
+                        symbol.PlainMessage.create(secret),
+                        networkType
+                    ).toAggregate(buyerAccount);
+
+                    const aggregateTx = symbol.AggregateTransaction.createComplete(
+                        symbol.Deadline.create(epochAdjustment),
+                        [txPayment, txData],
+                        networkType,
+                        [],
+                        symbol.UInt64.fromUint(1000000)
+                    );
+
+                    window.SSS.setTransaction(aggregateTx);
+                    const signedTx = await window.SSS.requestSign();
+                    if (!signedTx?.payload) throw new Error('署名が拒否されました');
+
+                    showSwapOverlay('送信中', 'ネットワークにデータを送信中...', 80);
+                    const res = await fetch('/api/purchase_sss', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ signedPayload: signedTx.payload })
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        checkStatus(signedTx.hash, activeAddress, p);
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } catch (e) {
+                    log(e, 'error');
+                    hideSwapOverlay();
+                }
             }
         }
 
