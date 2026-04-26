@@ -5,25 +5,6 @@ import path from 'path';
 import multer from 'multer';
 import { createClient } from '@vercel/kv';
 import { fileURLToPath } from 'url';
-import * as symbolSdkModule from 'symbol-sdk';
-
-/**
- * Symbol SDK v3 を Vercel 環境で確実に読み込むための再帰的展開
- */
-let SDK = symbolSdkModule;
-// SymbolFacade が見つかるまで nested default を展開する
-while (SDK && !SDK.SymbolFacade && SDK.default) {
-    console.log("[DEBUG] Unwrapping nested SDK default...");
-    SDK = SDK.default;
-}
-
-const {
-    PrivateKey,
-    PublicKey,
-    Signature,
-    SymbolFacade,
-    utils
-} = SDK;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,20 +25,33 @@ const CURRENCY_ID = '72C0212E67A08BCE';
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001';
 const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY || '55145D9FA93FEE1FB9E11A10CDF39F44BC';
 
-// Facade の初期化
-let facade;
-try {
-    if (SymbolFacade) {
-        facade = new SymbolFacade('testnet');
-        console.log("[INIT] SymbolFacade initialized successfully.");
-    } else {
-        console.error("[INIT] SymbolFacade class NOT found even after unwrapping.");
-        console.log("[DEBUG] Available SDK Keys:", Object.keys(SDK));
+/**
+ * Symbol SDK を動的にロードし、必要なクラスを抽出する
+ */
+async function getSDK() {
+    const mod = await import('symbol-sdk');
+    // あらゆるエクスポートパターン（defaultネストなど）に対応
+    const findClass = (m, name) => {
+        if (m[name]) return m[name];
+        if (m.default && m.default[name]) return m.default[name];
+        if (m.default && m.default.default && m.default.default[name]) return m.default.default[name];
+        return null;
+    };
+
+    const SymbolFacade = findClass(mod, 'SymbolFacade');
+    const PrivateKey = findClass(mod, 'PrivateKey');
+    const PublicKey = findClass(mod, 'PublicKey');
+    const Signature = findClass(mod, 'Signature');
+    const utils = findClass(mod, 'utils');
+
+    if (!SymbolFacade) {
+        throw new Error(`Failed to extract SymbolFacade from SDK. Available keys: ${Object.keys(mod)}`);
     }
-} catch (e) {
-    console.error("[INIT] SymbolFacade initialization failed:", e);
+
+    return { SymbolFacade, PrivateKey, PublicKey, Signature, utils, facade: new SymbolFacade('testnet') };
 }
 
+// ユーティリティ
 const toBigInt = (val) => {
     if (typeof val === 'bigint') return val;
     if (typeof val === 'number') return BigInt(Math.floor(val));
@@ -68,61 +62,49 @@ const toBigInt = (val) => {
 /**
  * 購入確認ロジック
  */
-async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
-    try {
-        const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
-        const cleanSeller = (sellerAddress || '').replace(/-/g, '').toUpperCase();
-        const cleanCurrencyId = (CURRENCY_ID || '').replace(/^0X/i, '').toUpperCase();
-        const targetAmount = BigInt(Math.round(Number(amount) * 1000000));
-
-        const endpoints = [
-            `${NODE_URL}/accounts/${cleanBuyer}/transactions/unconfirmed?pageSize=50`,
-            `${NODE_URL}/accounts/${cleanBuyer}/transactions/confirmed?pageSize=50`
-        ];
-
-        for (const url of endpoints) {
-            try {
-                const res = await fetch(url);
-                if (!res.ok) continue;
-                const data = await res.json();
-                if (!data.data) continue;
-
-                for (const txWrapper of data.data) {
-                    const tx = txWrapper.transaction;
-                    if (!tx) continue;
-                    
-                    const isMatchingTransfer = (e) => {
-                        if (!e || (e.type !== 16717 && e.type !== 'TRANSFER')) return false;
-                        let recipient = (e.recipientAddress || e.recipient || '');
-                        if (typeof recipient === 'object' && recipient.address) recipient = recipient.address;
-                        const cleanRecipient = String(recipient).replace(/-/g, '').toUpperCase();
-                        
-                        const mosaics = e.mosaics || [];
-                        const hasAmount = mosaics.some(m => {
-                            const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
-                            return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
-                        });
-                        return cleanRecipient === cleanSeller && hasAmount;
-                    };
-
-                    if (tx.type === 16705 || tx.type === 16961) {
-                        const embedded = tx.transactions || [];
-                        if (embedded.some(etx => isMatchingTransfer(etx.transaction))) return true;
-                    }
-                    if (isMatchingTransfer(tx)) return true;
-                }
-            } catch (e) { }
-        }
-        return false;
-    } catch (e) { return false; }
-}
-
 async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, productTitle) {
-    const maxRetries = 4;
-    for (let i = 0; i < maxRetries; i++) {
-        const found = await _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle);
-        if (found) return true;
-        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, 2500));
+    const cleanBuyer = (buyerAddress || '').replace(/-/g, '').toUpperCase();
+    const cleanSeller = (sellerAddress || '').replace(/-/g, '').toUpperCase();
+    const cleanCurrencyId = (CURRENCY_ID || '').replace(/^0X/i, '').toUpperCase();
+    const targetAmount = BigInt(Math.round(Number(amount) * 1000000));
+
+    const endpoints = [
+        `${NODE_URL}/accounts/${cleanBuyer}/transactions/unconfirmed?pageSize=50`,
+        `${NODE_URL}/accounts/${cleanBuyer}/transactions/confirmed?pageSize=50`
+    ];
+
+    for (const url of endpoints) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (!data.data) continue;
+
+            for (const txWrapper of data.data) {
+                const tx = txWrapper.transaction;
+                if (!tx) continue;
+                
+                const isMatchingTransfer = (e) => {
+                    if (!e || (e.type !== 16717 && e.type !== 'TRANSFER')) return false;
+                    let recipient = (e.recipientAddress || e.recipient || '');
+                    if (typeof recipient === 'object' && recipient.address) recipient = recipient.address;
+                    const cleanRecipient = String(recipient).replace(/-/g, '').toUpperCase();
+                    
+                    const mosaics = e.mosaics || [];
+                    const hasAmount = mosaics.some(m => {
+                        const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
+                        return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
+                    });
+                    return cleanRecipient === cleanSeller && hasAmount;
+                };
+
+                if (tx.type === 16705 || tx.type === 16961) {
+                    const embedded = tx.transactions || [];
+                    if (embedded.some(etx => isMatchingTransfer(etx.transaction))) return true;
+                }
+                if (isMatchingTransfer(tx)) return true;
+            }
+        } catch (e) { }
     }
     return false;
 }
@@ -149,14 +131,9 @@ async function saveProducts(products) {
 
 // --- API ---
 
-app.get('/api/config', (req, res) => {
+app.get('/api/config', async (req, res) => {
     try {
-        if (!facade || !PrivateKey) {
-             return res.status(500).json({ 
-                 error: "Symbol SDK initialization failed", 
-                 sdkKeys: Object.keys(SDK) 
-             });
-        }
+        const { facade, PrivateKey, utils } = await getSDK();
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         res.json({ 
@@ -165,7 +142,7 @@ app.get('/api/config', (req, res) => {
             status: "ready"
         });
     } catch (e) {
-        res.status(500).json({ error: e.message, stack: e.stack });
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -183,6 +160,7 @@ app.get('/api/products/:id/secret', async (req, res) => {
         const p = products.find(prod => String(prod.id) === String(req.params.id));
         if (!p) return res.status(404).json({ error: "Not found" });
 
+        const { facade, PrivateKey, utils } = await getSDK();
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         const opAddr = facade.network.publicKeyToAddress(opPubKey).toString();
@@ -204,6 +182,7 @@ app.get('/api/products/:id/download', async (req, res) => {
         const product = products.find(p => String(p.id) === String(id));
         if (!product) return res.status(404).json({ error: "商品が見つかりません" });
 
+        const { facade, PrivateKey, PublicKey, Signature, utils } = await getSDK();
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         const OP_ADDR = facade.network.publicKeyToAddress(opPubKey).toString();
@@ -271,8 +250,11 @@ app.post('/api/build_transaction', async (req, res) => {
         const { productId, buyerPublicKey } = req.body;
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(productId));
+        
+        const { facade, PrivateKey, PublicKey, utils } = await getSDK();
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
+
         const tx1 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: new PublicKey(utils.hexToUint8(buyerPublicKey)),
@@ -302,6 +284,7 @@ app.post('/api/build_transaction', async (req, res) => {
 
 app.post('/api/announce_transaction', async (req, res) => {
     try {
+        const { facade, utils } = await getSDK();
         const { payload, cosignatures } = req.body;
         const txBytes = utils.hexToUint8(payload);
         let finalBytes = new Uint8Array(txBytes.length + (cosignatures.length * 104));
@@ -322,7 +305,6 @@ app.post('/api/announce_transaction', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 静的ファイルの提供
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 app.use('/uploads', express.static(uploadDir));
