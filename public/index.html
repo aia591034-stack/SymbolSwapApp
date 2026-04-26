@@ -287,18 +287,41 @@
                     </button>
                 </div>
 
-                <div id="wallet-status" class="flex items-center space-x-2 md:space-x-3">
-                    <span id="admin-badge"
-                        class="hidden bg-red-500/10 text-red-500 border border-red-500/20 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase">
-                        ADMIN
-                    </span>
-                    <button id="connectSssBtn"
-                        class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
-                        <i class="fas fa-wallet"></i>
-                        <span class="hidden xs:inline">CONNECT WALLET</span>
-                        <span class="xs:hidden">CONNECT</span>
-                    </button>
+                <div id="wallet-status" class="flex flex-col items-end space-y-2">
+                    <div class="flex items-center space-x-2 md:space-x-3">
+                        <span id="admin-badge"
+                            class="hidden bg-red-500/10 text-red-500 border border-red-500/20 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase">
+                            ADMIN
+                        </span>
+                        <button id="connectSssBtn"
+                            class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
+                            <i class="fas fa-wallet"></i>
+                            <span class="hidden xs:inline">CONNECT WALLET</span>
+                            <span class="xs:hidden">CONNECT</span>
+                        </button>
+                    </div>
+                    <!-- Auth Mode Toggle -->
+                    <div class="flex items-center space-x-4 bg-white/5 p-1.5 rounded-xl border border-white/5">
+                        <button id="mode-sss" onclick="setAuthMode('sss')" class="px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all bg-indigo-500 text-white">SSS</button>
+                        <button id="mode-direct" onclick="setAuthMode('direct')" class="px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all text-slate-500 hover:text-indigo-400">DIRECT</button>
+                    </div>
                 </div>
+            </div>
+        </div>
+        <!-- Direct Mode Input Panel -->
+        <div id="direct-mode-panel" class="max-w-7xl mx-auto px-4 md:px-8 hidden">
+            <div class="glass p-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top duration-500">
+                <div class="flex items-center space-x-4 w-full md:w-auto">
+                    <div class="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center text-yellow-500">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-[10px] font-black text-yellow-500 uppercase tracking-widest">Mobile Direct Mode</h4>
+                        <input type="password" id="direct-private-key" placeholder="PASTE PRIVATE KEY (HEX)" 
+                               class="w-full bg-transparent border-none outline-none text-xs font-mono text-yellow-200 placeholder:text-yellow-700/50 p-0 mt-1">
+                    </div>
+                </div>
+                <button onclick="connectDirect()" class="w-full md:w-auto px-8 py-3 bg-yellow-500 text-black font-black text-[10px] rounded-xl tracking-widest uppercase hover:bg-yellow-400 transition-all">LINK KEY</button>
             </div>
         </div>
     </nav>
@@ -686,9 +709,74 @@
 
         let activeAddress = null;
         let activePublicKey = null;
+        let activePrivateKey = null; // Direct Mode only
+        let authMode = 'sss';
         let operatorAddress = null;
         let currentFilter = 'all';
         let allProducts = [];
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            document.getElementById('mode-sss').className = `px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all ${mode === 'sss' ? 'bg-indigo-500 text-white' : 'text-slate-500 hover:text-indigo-400'}`;
+            document.getElementById('mode-direct').className = `px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all ${mode === 'direct' ? 'bg-yellow-500 text-black' : 'text-slate-500 hover:text-indigo-400'}`;
+            
+            const panel = document.getElementById('direct-mode-panel');
+            if (mode === 'direct') {
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        async function connectDirect() {
+            const pk = document.getElementById('direct-private-key').value.trim();
+            if (!pk || pk.length !== 64) {
+                return showToast('Invalid Private Key (must be 64 hex chars)');
+            }
+
+            try {
+                log('Generating identity from key...');
+                const networkType = symbol.NetworkType.TEST_NET;
+                const account = symbol.Account.createFromPrivateKey(pk, networkType);
+                
+                activeAddress = account.address.plain();
+                activePublicKey = account.publicKey;
+                activePrivateKey = pk;
+
+                onWalletConnected();
+                log(`Direct Link established: ${activeAddress}`, 'success');
+                showToast('Welcome (Direct Mode)');
+            } catch (e) {
+                log('Invalid Key Format', 'error');
+            }
+        }
+
+        function onWalletConnected() {
+            const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+            const btn = document.getElementById('connectSssBtn');
+            if (authMode === 'sss') {
+                btn.innerHTML = `<i class="fas fa-fingerprint mr-2 text-indigo-400"></i>${shortAddr}`;
+                btn.className = "flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+            } else {
+                btn.innerHTML = `<i class="fas fa-key mr-2 text-yellow-400"></i>${shortAddr}`;
+                btn.className = "flex items-center space-x-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+                document.getElementById('direct-mode-panel').classList.add('hidden');
+            }
+
+            document.getElementById('user-address-short').innerText = activeAddress;
+            document.getElementById('user-avatar').innerText = activeAddress[0];
+            userDashboard.classList.remove('hidden');
+
+            document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+            document.getElementById('connect-prompt').classList.add('hidden');
+
+            if (activeAddress === operatorAddress) {
+                document.getElementById('admin-badge').classList.remove('hidden');
+            }
+
+            updateBalance();
+            renderProducts();
+        }
 
         // Guide Modal Logic
         function openGuide(type) {
@@ -959,7 +1047,30 @@
                             btn.className = "w-full py-5 rounded-2xl bg-emerald-500 text-white font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-emerald-500/20";
                             btn.onclick = async () => {
                                 try {
-                                    window.location.href = `/api/products/${p.id}/download?address=${activeAddress}`;
+                                    const timestamp = Date.now();
+                                    const message = `DownloadAsset:${p.id}:${timestamp}`;
+                                    let signature = '';
+
+                                    if (authMode === 'sss') {
+                                        log('Linking identity for download (SSS)...');
+                                        const signatureObj = await window.SSS.signStatusMessage(message);
+                                        if (!signatureObj || !signatureObj.signature) throw new Error('署名が拒否されました');
+                                        signature = signatureObj.signature;
+                                    } else {
+                                        log('Linking identity for download (Direct)...');
+                                        const networkType = symbol.NetworkType.TEST_NET;
+                                        const account = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
+                                        signature = account.signData(message);
+                                    }
+
+                                    const query = new URLSearchParams({
+                                        address: activeAddress,
+                                        publicKey: activePublicKey,
+                                        signature: signature,
+                                        timestamp: timestamp
+                                    });
+
+                                    window.location.href = `/api/products/${p.id}/download?${query.toString()}`;
                                     showToast('Asset retrieval initiated');
                                 } catch (e) {
                                     log(e, 'error');
@@ -1130,25 +1241,69 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
-                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                window.SSS.setTransaction(aggregateTx);
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx?.payload) throw new Error('Protocol rejected by user');
-
-                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
-                const res = await fetch('/api/purchase_sss', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ signedPayload: signedTx.payload })
-                });
-                const data = await res.json();
-
-                if (data.success) {
-                    log('Transaction broadcasted', 'success');
-                    checkStatus(signedTx.hash, activeAddress, p);
+                showSwapOverlay('Awaiting Signature', authMode === 'sss' ? 'SSSで署名してください' : '秘密鍵で署名しています...', 50);
+                
+                let signedTx;
+                if (authMode === 'sss') {
+                    window.SSS.setTransaction(aggregateTx);
+                    signedTx = await window.SSS.requestSign();
                 } else {
-                    throw new Error(data.error);
+                    const buyerAccount = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
+                    // 運営(A)の署名が必要なため、一度ペイロードをサーバーに送って運営の署名をもらうか、
+                    // またはSSSと同様にアグリゲートとして完結させる。
+                    // ここではSSSの挙動に合わせ、運営の署名が含まれた状態のトランザクションを構築する。
+                    // 実際には /api/build_transaction を使うのが確実。
+                    
+                    const buildRes = await fetch('/api/build_transaction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            productId: p.id, 
+                            buyerPublicKey: activePublicKey
+                        })
+                    });
+                    const buildData = await buildRes.json();
+                    if (!buildData.success) throw new Error(buildData.error || '構築失敗');
+                    const payload = buildData.payload;
+                    
+                    // 取得したアグリゲートペイロードに対して、自分の署名(コサイン署名)を追加
+                    const tx = symbol.AggregateTransaction.createFromPayload(payload);
+                    const cosignatureTransaction = symbol.CosignatureTransaction.create(tx);
+                    const cosignatureSigned = buyerAccount.signCosignatureTransaction(cosignatureTransaction);
+                    
+                    // サーバー側でコサイン署名を結合してアナウンスする
+                    const announceRes = await fetch('/api/announce_transaction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            payload: payload,
+                            cosignatures: [{
+                                signerPublicKey: activePublicKey,
+                                signature: cosignatureSigned.signature
+                            }]
+                        })
+                    });
+                    const announceData = await announceRes.json();
+                    if (!announceData.success) throw new Error(announceData.error);
+                    
+                    signedTx = { hash: announceData.hash };
                 }
+
+                if (authMode === 'sss') {
+                    if (!signedTx?.payload) throw new Error('Protocol rejected by user');
+                    showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+                    const res = await fetch('/api/purchase_sss', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ signedPayload: signedTx.payload })
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error);
+                    signedTx = { hash: signedTx.hash };
+                }
+
+                log('Transaction broadcasted', 'success');
+                checkStatus(signedTx.hash, activeAddress, p);
             } catch (e) {
                 log(e, 'error');
                 hideSwapOverlay();
