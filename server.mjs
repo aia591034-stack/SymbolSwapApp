@@ -4,8 +4,8 @@ import fs from 'fs';
 import { createClient } from '@vercel/kv';
 
 const kv = createClient({
-    url: process.env.VERCEL_KV_URL,
-    token: process.env.VERCEL_KV_REST_API_TOKEN,
+    url: process.env.KV_URL,
+    token: process.env.KV_REST_API_TOKEN,
 });
 import path from 'path';
 import { fileURLToPath } from 'url';
