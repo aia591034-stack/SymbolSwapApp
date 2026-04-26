@@ -8,9 +8,14 @@ import { fileURLToPath } from 'url';
 import * as symbolSdkModule from 'symbol-sdk';
 
 /**
- * Symbol SDK v3 を Vercel 環境で確実に読み込むための処理
+ * Symbol SDK v3 を Vercel 環境で確実に読み込むための再帰的展開
  */
-const SDK = symbolSdkModule.SymbolFacade ? symbolSdkModule : (symbolSdkModule.default || symbolSdkModule);
+let SDK = symbolSdkModule;
+// SymbolFacade が見つかるまで nested default を展開する
+while (SDK && !SDK.SymbolFacade && SDK.default) {
+    console.log("[DEBUG] Unwrapping nested SDK default...");
+    SDK = SDK.default;
+}
 
 const {
     PrivateKey,
@@ -46,7 +51,8 @@ try {
         facade = new SymbolFacade('testnet');
         console.log("[INIT] SymbolFacade initialized successfully.");
     } else {
-        console.error("[INIT] SymbolFacade class not found in SDK.");
+        console.error("[INIT] SymbolFacade class NOT found even after unwrapping.");
+        console.log("[DEBUG] Available SDK Keys:", Object.keys(SDK));
     }
 } catch (e) {
     console.error("[INIT] SymbolFacade initialization failed:", e);
@@ -60,7 +66,7 @@ const toBigInt = (val) => {
 };
 
 /**
- * 購入確認ロジック (Unconfirmed/Confirmed 両対応)
+ * 購入確認ロジック
  */
 async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productTitle) {
     try {
@@ -96,7 +102,6 @@ async function _verifyPurchaseOnce(buyerAddress, sellerAddress, amount, productT
                             const mId = String(m.id || '').replace(/^0X/i, '').toUpperCase();
                             return mId === cleanCurrencyId && BigInt(m.amount) === targetAmount;
                         });
-
                         return cleanRecipient === cleanSeller && hasAmount;
                     };
 
@@ -122,7 +127,6 @@ async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, produc
     return false;
 }
 
-// ファイルアップロード設定
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
@@ -143,11 +147,16 @@ async function saveProducts(products) {
     await kv.set("products", products);
 }
 
-// --- API ルート ---
+// --- API ---
 
 app.get('/api/config', (req, res) => {
     try {
-        if (!facade || !PrivateKey) throw new Error("Symbol SDK not properly initialized");
+        if (!facade || !PrivateKey) {
+             return res.status(500).json({ 
+                 error: "Symbol SDK initialization failed", 
+                 sdkKeys: Object.keys(SDK) 
+             });
+        }
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         res.json({ 
@@ -156,7 +165,6 @@ app.get('/api/config', (req, res) => {
             status: "ready"
         });
     } catch (e) {
-        console.error("/api/config error:", e);
         res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
@@ -165,9 +173,7 @@ app.get('/api/products', async (req, res) => {
     try {
         const products = await getProducts();
         res.json(products.map(({ secret, ...p }) => p));
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/products/:id/secret', async (req, res) => {
@@ -187,9 +193,7 @@ app.get('/api/products/:id/secret', async (req, res) => {
             if (purchased) return res.json({ secret: p.secret });
         }
         res.json({ secret: isAuthorized ? p.secret : "購入後に公開されます" });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/products/:id/download', async (req, res) => {
@@ -267,10 +271,8 @@ app.post('/api/build_transaction', async (req, res) => {
         const { productId, buyerPublicKey } = req.body;
         const products = await getProducts();
         const p = products.find(prod => String(prod.id) === String(productId));
-        
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
-
         const tx1 = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: new PublicKey(utils.hexToUint8(buyerPublicKey)),
