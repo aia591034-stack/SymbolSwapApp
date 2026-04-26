@@ -22,25 +22,19 @@ const kv = createClient({
 app.use(cors());
 app.use(express.json());
 
-// --- Symbol SDK v3 の互換性確保 ---
-let SDK = symbolSdkModule;
-if (SDK.default && !SDK.SymbolFacade) {
-    SDK = SDK.default;
-}
-if (SDK.default && !SDK.SymbolFacade) {
-    SDK = SDK.default; // 2重ラップ対応
-}
-
+// --- Symbol SDK v3 のエクスポートを安全に抽出 ---
+// Node.js 22 の ESM 環境では named import が失敗することがあるため、ここで手動で抽出する
+const SDK = symbolSdkModule.SymbolFacade ? symbolSdkModule : (symbolSdkModule.default || symbolSdkModule);
 const { SymbolFacade, PrivateKey, PublicKey, Signature, utils } = SDK;
 
-// 初期化
+// Facade の初期化
 let facade;
 try {
     if (SymbolFacade) {
         facade = new SymbolFacade('testnet');
     }
 } catch (e) {
-    console.error("Facade Init Error:", e);
+    console.error("SDK Init Error:", e);
 }
 
 // ネットワーク定数
@@ -142,12 +136,14 @@ async function verifyPurchaseOnChain(buyerAddress, sellerAddress, amount, produc
 
 app.get('/api/config', (req, res) => {
     try {
-        if (!SymbolFacade || !PrivateKey) throw new Error("SDK Load Failed");
+        if (!SymbolFacade || !PrivateKey) {
+            throw new Error(`SDK Load Error: ${typeof SymbolFacade}`);
+        }
         const opPrivKey = new PrivateKey(utils.hexToUint8(OPERATOR_KEY));
         const opPubKey = facade.createPublicKeysFromPrivateKeys(opPrivKey);
         res.json({ operatorPublicKey: opPubKey.toString(), currencyId: CURRENCY_ID, status: "ready" });
     } catch (e) {
-        res.status(500).json({ error: e.message, sdkType: typeof SDK, sdkKeys: Object.keys(SDK) });
+        res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
 
