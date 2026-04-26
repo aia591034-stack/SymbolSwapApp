@@ -1254,6 +1254,7 @@
                     // ここではSSSの挙動に合わせ、運営の署名が含まれた状態のトランザクションを構築する。
                     // 実際には /api/build_transaction を使うのが確実。
                     
+                    // サーバーから構築済みのアグリゲートペイロードを取得
                     const buildRes = await fetch('/api/build_transaction', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1265,11 +1266,15 @@
                     const buildData = await buildRes.json();
                     if (!buildData.success) throw new Error(buildData.error || '構築失敗');
                     const payload = buildData.payload;
+                    const hash = buildData.hash;
                     
-                    // 取得したアグリゲートペイロードに対して、自分の署名(コサイン署名)を追加
-                    const tx = symbol.AggregateTransaction.createFromPayload(payload);
-                    const cosignatureTransaction = symbol.CosignatureTransaction.create(tx);
-                    const cosignatureSigned = buyerAccount.signCosignatureTransaction(cosignatureTransaction);
+                    log('Cosigning transaction (Direct)...');
+                    const networkType = symbol.NetworkType.TEST_NET;
+                    const buyerAccount = symbol.Account.createFromPrivateKey(activePrivateKey, networkType);
+                    
+                    // アグリゲートハッシュに対して署名（コサイン署名）を作成
+                    // SDK v2: CosignatureTransaction は hash を必要とする
+                    const cosignature = buyerAccount.signCosignatureTransaction({ hash: hash });
                     
                     // サーバー側でコサイン署名を結合してアナウンスする
                     const announceRes = await fetch('/api/announce_transaction', {
@@ -1279,7 +1284,7 @@
                             payload: payload,
                             cosignatures: [{
                                 signerPublicKey: activePublicKey,
-                                signature: cosignatureSigned.signature
+                                signature: cosignature.signature
                             }]
                         })
                     });
