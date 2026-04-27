@@ -1000,6 +1000,7 @@
                 const account = symbol.Account.createFromPrivateKey(privKey, networkType);
                 activeAddress = account.address.plain();
                 activePublicKey = account.publicKey;
+                authMode = 'direct'; // 確実にダイレクトモードに設定
 
                 const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
                 document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-key mr-2 text-yellow-400"></i>${shortAddr}`;
@@ -1012,6 +1013,12 @@
                 document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
                 document.getElementById('connect-prompt').classList.add('hidden');
                 document.getElementById('direct-mode-panel').classList.add('hidden');
+
+                // モード切替UIも更新
+                document.getElementById('mode-sss').classList.remove('bg-indigo-500', 'text-white');
+                document.getElementById('mode-sss').classList.add('text-slate-500');
+                document.getElementById('mode-direct').classList.add('bg-indigo-500', 'text-white');
+                document.getElementById('mode-direct').classList.remove('text-slate-500');
 
                 log(`秘密鍵モードで接続完了: ${activeAddress}`, 'success');
                 showToast('認証されました');
@@ -1126,74 +1133,79 @@
 
             log(`スワップを開始: ${p.title}`);
             try {
-                // 1. サーバーでトランザクションを構築 (運営の署名入り)
-                showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
-                const buildRes = await fetch('/api/build_transaction', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        productId: p.id, 
-                        buyerPublicKey: activePublicKey,
-                        activeAddress: activeAddress
-                    })
-                });
-                const buildData = await buildRes.json();
-                if (!buildData.success) throw new Error(buildData.error);
-
+                // 1. サーバーから必要な設定と秘密情報を取得
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
                 const networkType = symbol.NetworkType.TEST_NET;
+                const epochAdjustment = 1667250467;
+
+                const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
+                if (!secretRes.ok) throw new Error('アセットデータの取得に失敗しました');
+                const { secret } = await secretRes.json();
+
+                showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
+
+                // アカウントオブジェクトの作成
+                const buyerPublicAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
+                const sellerAddress = symbol.Address.createFromRawAddress(p.sellerAddress);
+
+                // 送金トランザクション (買い手 -> 売り手)
+                const txPayment = symbol.TransferTransaction.create(
+                    symbol.Deadline.create(epochAdjustment),
+                    sellerAddress,
+                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
+                    symbol.PlainMessage.create('AETHER Swap: ' + p.title),
+                    networkType
+                ).toAggregate(buyerPublicAccount);
+
+                // データ記録トランザクション (買い手 -> 買い手)
+                const txData = symbol.TransferTransaction.create(
+                    symbol.Deadline.create(epochAdjustment),
+                    buyerPublicAccount.address,
+                    [],
+                    symbol.PlainMessage.create(secret),
+                    networkType
+                ).toAggregate(buyerPublicAccount);
+
+                // アグリゲートトランザクションとして結合
+                const aggregateTx = symbol.AggregateTransaction.createComplete(
+                    symbol.Deadline.create(epochAdjustment),
+                    [txPayment, txData],
+                    networkType,
+                    [],
+                    symbol.UInt64.fromUint(1000000)
+                );
 
                 showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
                 
-                let signedTxPayload;
-                let cosignature = null;
-
+                let signedTx;
                 if (authMode === 'sss') {
-                    // SSS の場合は、サーバーから受け取ったペイロードに対して連署（または主署名の置き換え）を行う
-                    // 現在の SSS 連携フローに合わせて調整
-                    const tx = symbol.AggregateTransaction.createFromPayload(buildData.payload);
-                    window.SSS.setTransaction(tx);
-                    const signedTx = await window.SSS.requestSign();
-                    if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
-                    signedTxPayload = signedTx.payload;
+                    window.SSS.setTransaction(aggregateTx);
+                    signedTx = await window.SSS.requestSign();
                 } else {
-                    // 秘密鍵モードの場合は、SDK v3 (または互換SDK) で連署を作成
+                    // 秘密鍵モードでのローカル署名
                     const privKey = document.getElementById('user-private-key').value;
                     const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
-                    
-                    // アグリゲートトランザクションをデシリアライズして連署を追加
-                    const tx = symbol.AggregateTransaction.createFromPayload(buildData.payload);
-                    const cosig = symbol.CosignatureTransaction.create(tx);
-                    const signedCosig = buyerAccount.signCosignatureTransaction(cosig);
-                    
-                    cosignature = {
-                        parentHash: signedCosig.parentHash,
-                        signature: signedCosig.signature,
-                        signerPublicKey: signedCosig.signerPublicKey
-                    };
-                    signedTxPayload = buildData.payload; // ベースのペイロードはそのまま
+                    signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
                 }
+
+                if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
 
                 showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
                 
-                // 2. アナウンスエンドポイントへ送信
-                const announceRes = await fetch(authMode === 'sss' ? '/api/purchase_sss' : '/api/announce_transaction', {
+                // アナウンス
+                const res = await fetch('/api/purchase_sss', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        signedPayload: signedTxPayload,
-                        payload: buildData.payload,
-                        cosignatures: cosignature ? [cosignature] : []
-                    })
+                    body: JSON.stringify({ signedPayload: signedTx.payload })
                 });
-                const announceData = await announceRes.json();
+                const data = await res.json();
 
-                if (announceData.success) {
+                if (data.success) {
                     log('トランザクションを送信しました', 'success');
-                    checkStatus(announceData.hash || buildData.hash, activeAddress, p);
+                    checkStatus(signedTx.hash, activeAddress, p);
                 } else {
-                    throw new Error(announceData.error);
+                    throw new Error(data.error);
                 }
             } catch (e) {
                 log(e, 'error');
