@@ -1126,72 +1126,74 @@
 
             log(`スワップを開始: ${p.title}`);
             try {
-                const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
-                if (!secretRes.ok) throw new Error('アセットデータの取得に失敗しました');
-                const { secret } = await secretRes.json();
+                // 1. サーバーでトランザクションを構築 (運営の署名入り)
+                showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
+                const buildRes = await fetch('/api/build_transaction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        productId: p.id, 
+                        buyerPublicKey: activePublicKey,
+                        activeAddress: activeAddress
+                    })
+                });
+                const buildData = await buildRes.json();
+                if (!buildData.success) throw new Error(buildData.error);
 
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
                 const networkType = symbol.NetworkType.TEST_NET;
 
-                const buyerAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
-                const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
-                const epochAdjustment = 1667250467;
-
-                showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
-
-                const txPayment = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    sellerAccount.address,
-                    [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
-                    symbol.PlainMessage.create('Nexus Swap: ' + p.title),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const txData = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
-                    buyerAccount.address,
-                    [],
-                    symbol.PlainMessage.create(secret),
-                    networkType
-                ).toAggregate(buyerAccount);
-
-                const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment),
-                    [txPayment, txData],
-                    networkType,
-                    [],
-                    symbol.UInt64.fromUint(1000000)
-                );
-
                 showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
                 
-                let signedTx;
+                let signedTxPayload;
+                let cosignature = null;
+
                 if (authMode === 'sss') {
-                    window.SSS.setTransaction(aggregateTx);
-                    signedTx = await window.SSS.requestSign();
+                    // SSS の場合は、サーバーから受け取ったペイロードに対して連署（または主署名の置き換え）を行う
+                    // 現在の SSS 連携フローに合わせて調整
+                    const tx = symbol.AggregateTransaction.createFromPayload(buildData.payload);
+                    window.SSS.setTransaction(tx);
+                    const signedTx = await window.SSS.requestSign();
+                    if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
+                    signedTxPayload = signedTx.payload;
                 } else {
-                    // 秘密鍵モードでの署名
+                    // 秘密鍵モードの場合は、SDK v3 (または互換SDK) で連署を作成
                     const privKey = document.getElementById('user-private-key').value;
                     const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
-                    signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
+                    
+                    // アグリゲートトランザクションをデシリアライズして連署を追加
+                    const tx = symbol.AggregateTransaction.createFromPayload(buildData.payload);
+                    const cosig = symbol.CosignatureTransaction.create(tx);
+                    const signedCosig = buyerAccount.signCosignatureTransaction(cosig);
+                    
+                    cosignature = {
+                        parentHash: signedCosig.parentHash,
+                        signature: signedCosig.signature,
+                        signerPublicKey: signedCosig.signerPublicKey
+                    };
+                    signedTxPayload = buildData.payload; // ベースのペイロードはそのまま
                 }
 
-                if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
-
                 showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
-                const res = await fetch('/api/purchase_sss', {
+                
+                // 2. アナウンスエンドポイントへ送信
+                const announceRes = await fetch(authMode === 'sss' ? '/api/purchase_sss' : '/api/announce_transaction', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ signedPayload: signedTx.payload })
+                    body: JSON.stringify({ 
+                        signedPayload: signedTxPayload,
+                        payload: buildData.payload,
+                        cosignatures: cosignature ? [cosignature] : []
+                    })
                 });
-                const data = await res.json();
+                const announceData = await announceRes.json();
 
-                if (data.success) {
+                if (announceData.success) {
                     log('トランザクションを送信しました', 'success');
-                    checkStatus(signedTx.hash, activeAddress, p);
+                    checkStatus(announceData.hash || buildData.hash, activeAddress, p);
                 } else {
-                    throw new Error(data.error);
+                    throw new Error(announceData.error);
                 }
             } catch (e) {
                 log(e, 'error');
