@@ -479,30 +479,10 @@
                                 class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-black text-[10px] tracking-widest uppercase text-white">
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-                            <div class="space-y-3">
-                                <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">販売形式</label>
-                                <div class="relative">
-                                    <select id="pSaleType" onchange="toggleMosaicInput()"
-                                        class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 outline-none font-black text-[10px] appearance-none tracking-widest text-white">
-                                        <option value="file">デジタルファイルのみ</option>
-                                        <option value="nft">NFT (モザイク) のみ</option>
-                                        <option value="both">ファイル + NFT セット</option>
-                                    </select>
-                                    <i
-                                        class="fas fa-chevron-down absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
-                                </div>
-                            </div>
-                            <div id="mosaic-id-container" class="space-y-3 hidden">
-                                <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">モザイク ID</label>
-                                <input type="text" id="pMosaicId" placeholder="72C0212E67A08BCE"
-                                    oninput="validateMosaic(this.value)"
-                                    class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 outline-none transition-all font-black text-indigo-500 text-sm">
-                                <p id="mosaic-valid-msg" class="text-[8px] font-bold uppercase tracking-widest hidden">
-                                </p>
-                            </div>
+                        <div class="space-y-3">
+                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">商品説明</label>
+                            <textarea id="pDescription" placeholder="アセットの詳細な説明を入力してください" rows="3"
+                                class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium text-[10px] tracking-wider text-white resize-none"></textarea>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
@@ -622,6 +602,12 @@
                         (XYM)</label>
                     <input type="number" id="edit-price"
                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-black text-2xl md:text-3xl text-indigo-500">
+                </div>
+                <div class="space-y-3">
+                    <label
+                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">商品説明</label>
+                    <textarea id="edit-description" rows="3"
+                        class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-[10px] tracking-wider text-white resize-none"></textarea>
                 </div>
                 <div class="flex space-x-4 md:space-x-6 pt-4">
                     <button id="cancel-edit"
@@ -1056,6 +1042,7 @@
             document.getElementById('edit-id').value = p.id;
             document.getElementById('edit-title').value = p.title;
             document.getElementById('edit-price').value = p.price;
+            document.getElementById('edit-description').value = p.description || "";
             editModal.classList.remove('hidden');
         }
 
@@ -1065,6 +1052,7 @@
             const body = {
                 title: document.getElementById('edit-title').value,
                 price: document.getElementById('edit-price').value,
+                description: document.getElementById('edit-description').value,
                 requesterAddress: activeAddress
             };
 
@@ -1270,6 +1258,7 @@
         document.getElementById('listBtn').onclick = async () => {
             const title = document.getElementById('pTitle').value;
             const price = document.getElementById('pPrice').value;
+            const description = document.getElementById('pDescription').value;
             const imageUrl = document.getElementById('pImageUrl').value;
             const fileInput = document.getElementById('pFile');
 
@@ -1280,6 +1269,7 @@
             const formData = new FormData();
             formData.append('title', title);
             formData.append('price', price);
+            formData.append('description', description);
             formData.append('seller', 'Creator');
             formData.append('sellerAddress', activeAddress);
             formData.append('sellerPublicKey', activePublicKey);
@@ -1292,6 +1282,7 @@
                 showToast('Asset deployed to Nexus');
                 loadProducts();
                 document.getElementById('pTitle').value = '';
+                document.getElementById('pDescription').value = '';
                 document.getElementById('pImageUrl').value = '';
                 document.getElementById('pFile').value = '';
                 document.getElementById('file-name-display').innerText = 'Drop digital file';
