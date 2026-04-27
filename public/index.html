@@ -819,7 +819,8 @@
         async function updateBalance() {
             if (!activeAddress) return;
             try {
-                const res = await fetch(`https://sym-test-01.opening-line.jp:3001/accounts/${activeAddress}`);
+                const nodeUrl = 'https://sym-test-03.opening-line.jp:3001';
+                const res = await fetch(`${nodeUrl}/accounts/${activeAddress}`);
                 if (res.ok) {
                     const data = await res.json();
                     const xym = data.account.mosaics.find(m => m.id === '72C0212E67A08BCE');
@@ -1167,13 +1168,13 @@
                     networkType
                 ).toAggregate(buyerPublicAccount);
 
-                // アグリゲートトランザクションとして結合
+                // アグリゲートトランザクションとして結合 (手数料を 0.1 XYM に固定)
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment),
                     [txPayment, txData],
                     networkType,
                     [],
-                    symbol.UInt64.fromUint(1000000)
+                    symbol.UInt64.fromUint(100000)
                 );
 
                 showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
@@ -1185,15 +1186,13 @@
                 } else {
                     // 秘密鍵モードでのローカル署名
                     const privKey = document.getElementById('user-private-key').value.trim();
-                    if (!privKey || privKey.length !== 64) throw new Error('有効な秘密鍵を入力してください（64文字の16進数）');
+                    if (!privKey || privKey.length !== 64) throw new Error('有効な秘密鍵を入力してください');
                     
                     const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
-                    // アグリゲートトランザクションの署名
                     signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
-                    log(`署名を生成しました (Hash: ${signedTx.hash.substring(0, 10)}...)`);
                 }
 
-                if (!signedTx || !signedTx.payload) throw new Error('署名プロセスが中断されました。ペイロードが生成できませんでした。');
+                if (!signedTx || !signedTx.payload) throw new Error('署名プロセスが中断されました');
 
                 showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
                 
@@ -1206,14 +1205,13 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    log('トランザクションを送信しました。承認を待機しています...', 'success');
+                    log('トランザクションを送信しました。検証中...', 'success');
                     checkStatus(signedTx.hash, activeAddress, p);
                 } else {
-                    throw new Error(data.error || 'ノードがトランザクションを拒否しました。');
+                    throw new Error(data.error);
                 }
             } catch (e) {
                 log(e, 'error');
-                showToast('取引に失敗しました');
                 hideSwapOverlay();
             }
         }
@@ -1221,13 +1219,13 @@
         async function checkStatus(hash, buyerName, p) {
             let retryCount = 0;
             const maxRetries = 20;
+            const nodeUrl = 'https://sym-test-03.opening-line.jp:3001';
 
             const interval = setInterval(async () => {
                 retryCount++;
                 showSwapOverlay('Validating', `ネットワークの承認を待機中... (${retryCount}/${maxRetries})`, 80 + (retryCount));
 
                 try {
-                    const nodeUrl = 'https://sym-test-01.opening-line.jp:3001';
                     const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
                     const data = await res.json();
 
@@ -1243,17 +1241,20 @@
                         updateBalance();
                         renderProducts();
                         hideSwapOverlay();
-                    } else if (data.group === 'failed') {
-                        clearInterval(interval);
-                        showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
-                        log(`Consensus error: ${data.code}`, 'error');
-                        hideSwapOverlay();
+                    } else if (data.group === 'failed' || data.code) {
+                        // エラーコードがある場合は即座に停止して表示
+                        if (data.code !== 'Success') {
+                            clearInterval(interval);
+                            showSwapOverlay('Protocol Failed', `Error: ${data.code}`, 0);
+                            log(`承認エラー: ${data.code}`, 'error');
+                            hideSwapOverlay();
+                        }
                     }
                 } catch (e) { }
 
                 if (retryCount >= maxRetries) {
                     clearInterval(interval);
-                    showSwapOverlay('Timeout', 'ネットワークが混雑しています', 0);
+                    showSwapOverlay('Timeout', '承認に時間がかかっています。後ほど残高を確認してください', 0);
                     hideSwapOverlay();
                 }
             }, 5000);
