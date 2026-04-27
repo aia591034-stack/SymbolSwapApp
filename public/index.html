@@ -1184,12 +1184,16 @@
                     signedTx = await window.SSS.requestSign();
                 } else {
                     // 秘密鍵モードでのローカル署名
-                    const privKey = document.getElementById('user-private-key').value;
+                    const privKey = document.getElementById('user-private-key').value.trim();
+                    if (!privKey || privKey.length !== 64) throw new Error('有効な秘密鍵を入力してください（64文字の16進数）');
+                    
                     const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
+                    // アグリゲートトランザクションの署名
                     signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
+                    log(`署名を生成しました (Hash: ${signedTx.hash.substring(0, 10)}...)`);
                 }
 
-                if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
+                if (!signedTx || !signedTx.payload) throw new Error('署名プロセスが中断されました。ペイロードが生成できませんでした。');
 
                 showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
                 
@@ -1202,13 +1206,14 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    log('トランザクションを送信しました', 'success');
+                    log('トランザクションを送信しました。承認を待機しています...', 'success');
                     checkStatus(signedTx.hash, activeAddress, p);
                 } else {
-                    throw new Error(data.error);
+                    throw new Error(data.error || 'ノードがトランザクションを拒否しました。');
                 }
             } catch (e) {
                 log(e, 'error');
+                showToast('取引に失敗しました');
                 hideSwapOverlay();
             }
         }
