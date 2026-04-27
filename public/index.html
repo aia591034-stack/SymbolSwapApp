@@ -269,7 +269,7 @@
                 <div id="balance-display"
                     class="hidden sm:flex items-center space-x-2 md:space-x-3 px-3 md:px-5 py-2 md:py-2.5 bg-white/5 rounded-xl md:rounded-2xl border border-white/5">
                     <span
-                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden md:inline">Balance</span>
+                        class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden md:inline">残高</span>
                     <span id="xym-balance" class="text-xs md:text-sm font-bold">0.00</span>
                     <span class="text-[8px] md:text-[10px] font-black text-slate-500">XYM</span>
                 </div>
@@ -291,7 +291,7 @@
                     <div class="flex items-center space-x-2 md:space-x-3">
                         <span id="admin-badge"
                             class="hidden bg-red-500/10 text-red-500 border border-red-500/20 px-2 md:px-3 py-1 rounded-lg text-[8px] md:text-[10px] font-black uppercase">
-                            ADMIN
+                            管理者
                         </span>
                         <button id="connectSssBtn"
                             class="btn-primary flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg shadow-indigo-500/20 text-white truncate max-w-[120px] md:max-w-none">
@@ -334,20 +334,20 @@
                                 Protocol</span>
                         </div>
                         <h1 class="text-4xl md:text-6xl font-black mb-6 md:mb-8 leading-[1.1] tracking-tighter">
-                            デジタル資産を<br /><span class="gradient-text">次世代へ</span>
+                            デジタル資産を<br /><span class="gradient-text">真の所有へ</span>
                         </h1>
                         <p class="text-slate-400 text-sm md:text-lg leading-relaxed mb-8 md:mb-12 font-medium">
-                            Symbolの信頼不要なアトミックスワップ技術で、あなたのデジタル資産を安全に取引。
-                            仲介者を排除し、価値が直接つながる新しいマーケットプレイス。
+                            Symbolのアトミックスワップ技術で、あなたのデジタル資産を安全に取引。
+                            仲介者を排除し、価値が直接つながるトラストレスなマーケットプレイス。
                         </p>
 
                         <div
                             class="flex flex-col md:flex-row items-center justify-center md:justify-start space-y-6 md:space-y-0 md:space-x-8">
                             <button
-                                class="btn-primary w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-widest text-white uppercase">マーケットを探す</button>
+                                class="btn-primary w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-widest text-white uppercase">マーケットを探索</button>
                             <div class="flex items-center space-x-3">
                                 <span
-                                    class="text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">コミュニティ主導の次世代プロトコル</span>
+                                    class="text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">テストネットで稼働中</span>
                             </div>
                         </div>
                     </div>
@@ -367,9 +367,8 @@
                 <section class="space-y-8 md:space-y-10" data-aos="fade-up">
                     <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-8">
                         <div class="text-center md:text-left">
-                            <h2 class="text-3xl md:text-4xl font-black tracking-tighter mb-2 md:mb-3 text-white">The
-                                Nexus</h2>
-                            <p class="text-slate-500 text-sm md:text-base font-medium">厳選された最高品質のデジタルアセット</p>
+                            <h2 class="text-3xl md:text-4xl font-black tracking-tighter mb-2 md:mb-3 text-white">マーケットプレイス</h2>
+                            <p class="text-slate-500 text-sm md:text-base font-medium">Symbolブロックチェーン上のデジタルアセット</p>
                         </div>
 
                         <div
@@ -377,14 +376,14 @@
                             <div
                                 class="flex p-1 bg-white/5 rounded-xl md:rounded-2xl border border-white/5 w-full xs:w-auto">
                                 <button onclick="filterProducts('all')"
-                                    class="filter-chip active flex-1 xs:flex-none px-4 md:px-6 py-2.5 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">Global</button>
+                                    class="filter-chip active flex-1 xs:flex-none px-4 md:px-6 py-2.5 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">すべて</button>
                                 <button onclick="filterProducts('my')"
-                                    class="filter-chip flex-1 xs:flex-none px-4 md:px-6 py-2.5 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">Private</button>
+                                    class="filter-chip flex-1 xs:flex-none px-4 md:px-6 py-2.5 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">自分の出品</button>
                             </div>
                             <div class="relative w-full xs:w-auto">
                                 <i
                                     class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-                                <input type="text" id="market-search" placeholder="SEARCH ASSETS..."
+                                <input type="text" id="market-search" placeholder="アセットを検索..."
                                     class="pl-12 pr-6 py-3.5 bg-white/5 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black border-none outline-none focus:ring-2 focus:ring-indigo-500/20 w-full xs:w-48 md:focus:w-64 transition-all uppercase tracking-widest text-white">
                             </div>
                         </div>
@@ -400,9 +399,7 @@
                             class="w-20 md:w-24 h-20 md:h-24 bg-white/5 rounded-full flex items-center justify-center text-slate-700 text-3xl md:text-4xl">
                             <i class="fas fa-ghost"></i>
                         </div>
-                        <p class="text-slate-500 font-black uppercase tracking-[0.3em] text-[8px] md:text-[10px]">No
-                            assets detected
-                            in the nexus</p>
+                        <p class="text-slate-500 font-black uppercase tracking-[0.3em] text-[8px] md:text-[10px]">アセットが見つかりません</p>
                     </div>
                 </section>
             </div>
@@ -421,11 +418,11 @@
                                 ?
                             </div>
                             <div>
-                                <h3 class="font-black text-base md:text-lg leading-none mb-2 text-white">Authenticated
+                                <h3 class="font-black text-base md:text-lg leading-none mb-2 text-white">認証済み
                                 </h3>
                                 <p id="user-address-short"
                                     class="text-[8px] md:text-[10px] font-black text-slate-500 tracking-widest uppercase truncate w-24 md:w-32">
-                                    Not Connected
+                                    未接続
                                 </p>
                             </div>
                         </div>
@@ -435,17 +432,30 @@
                         </button>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3 md:gap-4">
+                    <div class="grid grid-cols-2 gap-3 md:gap-4 mb-4">
                         <div class="bg-white/5 p-4 md:p-5 rounded-2xl md:rounded-3xl border border-white/5">
                             <span
-                                class="block text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Deployed</span>
+                                class="block text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">出品数</span>
                             <span id="my-items-count" class="text-xl md:text-2xl font-black text-white">0</span>
                         </div>
                         <div class="bg-white/5 p-4 md:p-5 rounded-2xl md:rounded-3xl border border-white/5">
                             <span
-                                class="block text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Acquired</span>
+                                class="block text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">購入数</span>
                             <span id="purchased-count" class="text-xl md:text-2xl font-black text-white">0</span>
                         </div>
+                    </div>
+
+                    <!-- 謝礼貯金箱 (Reward Piggy Bank) -->
+                    <div class="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-5 md:p-6 rounded-[2rem] border border-indigo-500/20 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                            <i class="fas fa-piggy-bank text-4xl text-indigo-400"></i>
+                        </div>
+                        <span class="block text-[8px] md:text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-3">謝礼貯金箱 (獲得累計)</span>
+                        <div class="flex items-baseline space-x-2">
+                            <span id="total-earned" class="text-3xl md:text-4xl font-black text-white">0.00</span>
+                            <span class="text-[10px] font-black text-indigo-400 uppercase">XYM</span>
+                        </div>
+                        <p class="text-[8px] text-slate-500 mt-3 font-medium">アセットの販売によって獲得した総額です</p>
                     </div>
                 </section>
 
@@ -457,30 +467,28 @@
                             class="w-10 h-10 md:w-12 md:h-12 bg-indigo-600 rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
                             <i class="fas fa-plus text-sm md:text-base"></i>
                         </div>
-                        <h2 class="text-lg md:text-xl font-black tracking-tighter uppercase text-white">Launch Asset
+                        <h2 class="text-lg md:text-xl font-black tracking-tighter uppercase text-white">アセットを出品
                         </h2>
                     </div>
 
                     <div id="sell-form"
                         class="space-y-6 md:space-y-8 opacity-40 pointer-events-none transition-all duration-700">
                         <div class="space-y-3">
-                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Asset
-                                Name</label>
-                            <input type="text" id="pTitle" placeholder="NAME YOUR ASSET"
+                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">アセット名</label>
+                            <input type="text" id="pTitle" placeholder="アセットの名前を入力"
                                 class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-black text-[10px] tracking-widest uppercase text-white">
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                             <div class="space-y-3">
                                 <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Sale
-                                    Type</label>
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">販売形式</label>
                                 <div class="relative">
                                     <select id="pSaleType" onchange="toggleMosaicInput()"
                                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 outline-none font-black text-[10px] appearance-none tracking-widest text-white">
-                                        <option value="file">DIGITAL FILE ONLY</option>
-                                        <option value="nft">NFT (MOSAIC) ONLY</option>
-                                        <option value="both">FILE + NFT BUNDLE</option>
+                                        <option value="file">デジタルファイルのみ</option>
+                                        <option value="nft">NFT (モザイク) のみ</option>
+                                        <option value="both">ファイル + NFT セット</option>
                                     </select>
                                     <i
                                         class="fas fa-chevron-down absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
@@ -488,8 +496,7 @@
                             </div>
                             <div id="mosaic-id-container" class="space-y-3 hidden">
                                 <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Mosaic
-                                    ID</label>
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">モザイク ID</label>
                                 <input type="text" id="pMosaicId" placeholder="72C0212E67A08BCE"
                                     oninput="validateMosaic(this.value)"
                                     class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 outline-none transition-all font-black text-indigo-500 text-sm">
@@ -501,7 +508,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                             <div class="space-y-3">
                                 <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Price</label>
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">価格</label>
                                 <div class="relative">
                                     <input type="number" id="pPrice" value="10"
                                         class="w-full pl-5 md:pl-6 pr-12 md:pr-14 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 outline-none transition-all font-black text-indigo-500 text-base md:text-lg">
@@ -511,14 +518,14 @@
                             </div>
                             <div class="space-y-3">
                                 <label
-                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Category</label>
+                                    class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">カテゴリー</label>
                                 <div class="relative">
                                     <select
                                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 outline-none font-black text-[10px] appearance-none tracking-widest text-white">
-                                        <option>VISUAL ART</option>
-                                        <option>SOURCE CODE</option>
-                                        <option>AUDIO FILE</option>
-                                        <option>3D ASSET</option>
+                                        <option>デジタルアート</option>
+                                        <option>ソースコード</option>
+                                        <option>オーディオ</option>
+                                        <option>3D モデル</option>
                                     </select>
                                     <i
                                         class="fas fa-chevron-down absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
@@ -527,15 +534,13 @@
                         </div>
 
                         <div class="space-y-3">
-                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Visual
-                                Identity (URL)</label>
+                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">サムネイル URL</label>
                             <input type="text" id="pImageUrl" placeholder="https://..."
                                 class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 outline-none font-medium text-[10px] text-white">
                         </div>
 
                         <div class="space-y-3">
-                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">Data
-                                Payload</label>
+                            <label class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-1">データファイル</label>
                             <div class="relative group">
                                 <input type="file" id="pFile"
                                     class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
@@ -547,19 +552,18 @@
                                     </div>
                                     <span
                                         class="text-[8px] md:text-[9px] font-black text-slate-500 group-hover:text-indigo-400 uppercase tracking-[0.3em]"
-                                        id="file-name-display">Drop digital file</span>
+                                        id="file-name-display">ファイルをドロップ</span>
                                 </div>
                             </div>
                         </div>
 
                         <button id="listBtn"
                             class="btn-primary w-full py-5 md:py-6 rounded-xl md:rounded-2xl text-white font-black text-[10px] uppercase tracking-[0.3em] md:tracking-[0.4em] shadow-xl shadow-indigo-500/20 mt-4">
-                            INITIALIZE DEPLOYMENT
+                            デプロイを開始する
                         </button>
                     </div>
                     <div id="connect-prompt" class="mt-4 text-center">
-                        <p class="text-[9px] font-black text-indigo-400/50 uppercase tracking-[0.2em]">Auth Required for
-                            Deployment</p>
+                        <p class="text-[9px] font-black text-indigo-400/50 uppercase tracking-[0.2em]">出品にはウォレット接続が必要です</p>
                     </div>
                 </section>
 
@@ -891,10 +895,14 @@
             });
 
             if (activeAddress) {
-                const myItemsCount = allProducts.filter(p => p.sellerAddress === activeAddress).length;
-                document.getElementById('my-items-count').innerText = myItemsCount;
+                const myItems = allProducts.filter(p => p.sellerAddress === activeAddress);
+                document.getElementById('my-items-count').innerText = myItems.length;
                 const purchasedCount = Object.keys(localStorage).filter(k => k.startsWith('purchased_')).length;
                 document.getElementById('purchased-count').innerText = purchasedCount;
+
+                // 謝礼貯金箱の計算 (デモ用に出品総額を表示、または将来的に販売実績を計算)
+                const totalValue = myItems.reduce((sum, p) => sum + (p.price || 0), 0);
+                document.getElementById('total-earned').innerText = totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 });
             }
 
             list.innerHTML = '';
@@ -922,7 +930,7 @@
 
                             <div class="absolute bottom-4 md:bottom-6 left-6 md:left-8 right-6 md:right-8">
                                 <div class="flex items-center space-x-2 md:space-x-3 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2 md:mb-3">
-                                    <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'OWNED BY YOU' : 'AVAILABLE'}</span>
+                                    <span class="px-2 py-0.5 md:px-2.5 md:py-1 bg-indigo-500 rounded-md md:rounded-lg text-white">${p.sellerAddress === activeAddress ? 'あなたの出品' : '販売中'}</span>
                                     <span class="text-white/40">•</span>
                                     <span class="text-white/60">${p.fileName ? p.fileName.split('.').pop().toUpperCase() : 'ASSET'}</span>
                                 </div>
@@ -931,20 +939,20 @@
                         </div>
                         <div class="p-6 md:p-10 space-y-6 md:space-y-10">
                             <p class="text-[10px] md:text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 h-8 md:h-10">
-                                ${p.description || "No description provided for this digital asset."}
+                                ${p.description || "このデジタルアセットには説明がありません。"}
                             </p>
                             ${isOwner ? `
                             <div class="flex space-x-2 md:space-x-3">
                                 <button onclick='event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/'/g, "'")})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
-                                    MODIFY
+                                    編集
                                 </button>
                                 <button onclick='event.stopPropagation(); deleteProduct(${p.id})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-500 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 transition-all border border-white/5 shadow-sm">
-                                    DELETE
+                                    削除
                                 </button>
                             </div>
                             ` : `
                             <button id="buy-${p.id}" class="btn-primary w-full py-4 md:py-5 rounded-xl md:rounded-2xl text-white font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all flex items-center justify-center group/btn shadow-xl shadow-indigo-500/10">
-                                <span>EXECUTE SWAP</span>
+                                <span>スワップを実行</span>
                                 <i class="fas fa-chevron-right ml-3 md:ml-4 text-[8px] opacity-40 group-hover/btn:translate-x-1 transition-all"></i>
                             </button>
                             `}
@@ -956,12 +964,12 @@
                     if (localStorage.getItem(`purchased_${p.id}`)) {
                         const btn = document.getElementById(`buy-${p.id}`);
                         if (btn) {
-                            btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-3 text-lg"></i>RETRIEVE ASSET';
+                            btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-3 text-lg"></i>データを取得';
                             btn.className = "w-full py-5 rounded-2xl bg-emerald-500 text-white font-black text-[10px] uppercase tracking-[0.3em] shadow-xl shadow-emerald-500/20";
                             btn.onclick = async () => {
                                 try {
                                     window.location.href = `/api/products/${p.id}/download?address=${activeAddress}`;
-                                    showToast('Asset retrieval initiated');
+                                    showToast('ダウンロードを開始しました');
                                 } catch (e) {
                                     log(e, 'error');
                                 }
@@ -987,7 +995,59 @@
                 allProducts = await res.json();
                 renderProducts();
             } catch (e) {
-                log('Nexus sync failed', 'error');
+                log('マーケット同期に失敗しました', 'error');
+            }
+        }
+
+        // --- Auth Mode & Direct Mode Logic ---
+        let authMode = 'sss';
+        function setAuthMode(mode) {
+            authMode = mode;
+            document.getElementById('mode-sss').classList.toggle('bg-indigo-500', mode === 'sss');
+            document.getElementById('mode-sss').classList.toggle('text-white', mode === 'sss');
+            document.getElementById('mode-sss').classList.toggle('text-slate-500', mode !== 'sss');
+            
+            document.getElementById('mode-direct').classList.toggle('bg-indigo-500', mode === 'direct');
+            document.getElementById('mode-direct').classList.toggle('text-white', mode === 'direct');
+            document.getElementById('mode-direct').classList.toggle('text-slate-500', mode !== 'direct');
+
+            if (mode === 'direct') {
+                document.getElementById('direct-mode-panel').classList.remove('hidden');
+            } else {
+                document.getElementById('direct-mode-panel').classList.add('hidden');
+            }
+        }
+
+        async function connectDirect() {
+            const privKey = document.getElementById('user-private-key').value;
+            if (!privKey || privKey.length !== 64) {
+                return showToast('正しい秘密鍵を入力してください');
+            }
+
+            try {
+                const networkType = symbol.NetworkType.TEST_NET;
+                const account = symbol.Account.createFromPrivateKey(privKey, networkType);
+                activeAddress = account.address.plain();
+                activePublicKey = account.publicKey;
+
+                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
+                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-key mr-2 text-yellow-400"></i>${shortAddr}`;
+                document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
+
+                document.getElementById('user-address-short').innerText = activeAddress;
+                document.getElementById('user-avatar').innerText = activeAddress[0];
+                userDashboard.classList.remove('hidden');
+
+                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
+                document.getElementById('connect-prompt').classList.add('hidden');
+                document.getElementById('direct-mode-panel').classList.add('hidden');
+
+                log(`秘密鍵モードで接続完了: ${activeAddress}`, 'success');
+                showToast('認証されました');
+                updateBalance();
+                renderProducts();
+            } catch (e) {
+                log('秘密鍵が不正です', 'error');
             }
         }
 
@@ -1015,7 +1075,7 @@
             });
 
             if (res.ok) {
-                showToast('Asset identity updated');
+                showToast('アセット情報を更新しました');
                 editModal.classList.add('hidden');
                 loadProducts();
             } else {
@@ -1025,7 +1085,7 @@
         };
 
         async function deleteProduct(id) {
-            if (!confirm('Permanently remove this asset from the nexus?')) return;
+            if (!confirm('このアセットをマーケットから削除しますか？')) return;
 
             const res = await fetch(`/api/products/${id}`, {
                 method: 'DELETE',
@@ -1034,7 +1094,7 @@
             });
 
             if (res.ok) {
-                showToast('Asset purged');
+                showToast('アセットを削除しました');
                 loadProducts();
             } else {
                 const err = await res.json();
@@ -1044,7 +1104,7 @@
 
         // Wallet Logic
         document.getElementById('connectSssBtn').onclick = async () => {
-            log('Scanning for SSS Identity...');
+            log('SSS Identity をスキャン中...');
             let retry = 0;
             const check = setInterval(() => {
                 if (window.SSS) {
@@ -1053,7 +1113,7 @@
                     activePublicKey = window.SSS.activePublicKey;
 
                     if (!activeAddress) {
-                        log('Please unlock SSS extension', 'error');
+                        log('SSS 拡張機能をアンロックしてください', 'error');
                         return;
                     }
 
@@ -1070,31 +1130,31 @@
 
                     if (activeAddress === operatorAddress) {
                         document.getElementById('admin-badge').classList.remove('hidden');
-                        log('Privileged Access Granted', 'success');
+                        log('管理者権限で接続しました', 'success');
                     }
 
-                    log(`Identity linked: ${activeAddress}`, 'success');
-                    showToast('Welcome to the Nexus');
+                    log(`接続済み: ${activeAddress}`, 'success');
+                    showToast('Nexus へようこそ');
                     updateBalance();
                     renderProducts();
                 }
                 if (++retry > 10) {
                     clearInterval(check);
-                    log('SSS Identity Provider not detected', 'error');
+                    log('SSS 拡張機能が見つかりません', 'error');
                 }
             }, 500);
         };
 
         async function buyProduct(p) {
-            if (!activeAddress) return showToast('Link wallet to proceed');
+            if (!activeAddress) return showToast('ウォレットを接続してください');
 
-            showSwapOverlay('Initializing Protocol', 'アセットと通貨の同時交換を開始しています...', 10);
+            showSwapOverlay('プロトコル初期化中', 'アセットと通貨の同時交換を開始しています...', 10);
             document.getElementById('node-buyer').classList.add('active');
 
-            log(`Initiating swap protocol: ${p.title}`);
+            log(`スワップを開始: ${p.title}`);
             try {
                 const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
-                if (!secretRes.ok) throw new Error('Failed to retrieve asset data');
+                if (!secretRes.ok) throw new Error('アセットデータの取得に失敗しました');
                 const { secret } = await secretRes.json();
 
                 const configRes = await fetch('/api/config');
@@ -1105,7 +1165,7 @@
                 const sellerAccount = symbol.PublicAccount.createFromPublicKey(p.sellerPublicKey, networkType);
                 const epochAdjustment = 1667250467;
 
-                showSwapOverlay('Constructing Tx', 'アグリゲートトランザクションを構築中...', 30);
+                showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
 
                 const txPayment = symbol.TransferTransaction.create(
                     symbol.Deadline.create(epochAdjustment),
@@ -1131,12 +1191,22 @@
                     symbol.UInt64.fromUint(1000000)
                 );
 
-                showSwapOverlay('Awaiting Signature', 'SSSでトランザクションに署名してください', 50);
-                window.SSS.setTransaction(aggregateTx);
-                const signedTx = await window.SSS.requestSign();
-                if (!signedTx?.payload) throw new Error('Protocol rejected by user');
+                showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
+                
+                let signedTx;
+                if (authMode === 'sss') {
+                    window.SSS.setTransaction(aggregateTx);
+                    signedTx = await window.SSS.requestSign();
+                } else {
+                    // 秘密鍵モードでの署名
+                    const privKey = document.getElementById('user-private-key').value;
+                    const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
+                    signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
+                }
 
-                showSwapOverlay('Broadcasting', 'ネットワークにデータを送信中...', 70);
+                if (!signedTx?.payload) throw new Error('署名プロセスが中断されました');
+
+                showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
                 const res = await fetch('/api/purchase_sss', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1145,7 +1215,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    log('Transaction broadcasted', 'success');
+                    log('トランザクションを送信しました', 'success');
                     checkStatus(signedTx.hash, activeAddress, p);
                 } else {
                     throw new Error(data.error);
