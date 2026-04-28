@@ -1134,11 +1134,15 @@
 
             log(`スワップを開始: ${p.title}`);
             try {
-                // 1. サーバーから必要な設定と秘密情報を取得
+                // 1. サーバーから必要な設定を取得
+                const configRes = await fetch('/api/config');
+                const config = await configRes.json();
+                
                 // ネットワークタイプを確実に指定 (Testnet: 152)
                 const networkType = symbol.NetworkType.TEST_NET;
                 const epochAdjustment = 1667250467;
 
+                // 2. 秘密情報を取得
                 const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
                 if (!secretRes.ok) throw new Error('アセットデータの取得に失敗しました');
                 const { secret } = await secretRes.json();
@@ -1168,7 +1172,6 @@
                 ).toAggregate(buyerPublicAccount);
 
                 // アグリゲートトランザクションとして結合
-                // ※ ダイレクトモードで失敗する場合、第3引数のネットワークタイプが重要です
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment, 2),
                     [txPayment, txData],
