@@ -1168,13 +1168,13 @@
                     networkType
                 ).toAggregate(buyerPublicAccount);
 
-                // アグリゲートトランザクションとして結合 (手数料を 0.1 XYM に固定)
+                // アグリゲートトランザクションとして結合 (手数料を 0.2 XYM に増加)
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment),
+                    symbol.Deadline.create(epochAdjustment, 2), // 2時間の猶予を持たせる
                     [txPayment, txData],
                     networkType,
                     [],
-                    symbol.UInt64.fromUint(100000)
+                    symbol.UInt64.fromUint(200000)
                 );
 
                 showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
