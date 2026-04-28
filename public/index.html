@@ -1135,8 +1135,7 @@
             log(`スワップを開始: ${p.title}`);
             try {
                 // 1. サーバーから必要な設定と秘密情報を取得
-                const configRes = await fetch('/api/config');
-                const config = await configRes.json();
+                // ネットワークタイプを確実に指定 (Testnet: 152)
                 const networkType = symbol.NetworkType.TEST_NET;
                 const epochAdjustment = 1667250467;
 
@@ -1152,7 +1151,7 @@
 
                 // 送金トランザクション (買い手 -> 売り手)
                 const txPayment = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
+                    symbol.Deadline.create(epochAdjustment, 2),
                     sellerAddress,
                     [new symbol.Mosaic(new symbol.MosaicId(config.currencyId), symbol.UInt64.fromUint(p.price * 1000000))],
                     symbol.PlainMessage.create('AETHER Swap: ' + p.title),
@@ -1161,16 +1160,17 @@
 
                 // データ記録トランザクション (買い手 -> 買い手)
                 const txData = symbol.TransferTransaction.create(
-                    symbol.Deadline.create(epochAdjustment),
+                    symbol.Deadline.create(epochAdjustment, 2),
                     buyerPublicAccount.address,
                     [],
                     symbol.PlainMessage.create(secret),
                     networkType
                 ).toAggregate(buyerPublicAccount);
 
-                // アグリゲートトランザクションとして結合 (手数料を 0.2 XYM に増加)
+                // アグリゲートトランザクションとして結合
+                // ※ ダイレクトモードで失敗する場合、第3引数のネットワークタイプが重要です
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
-                    symbol.Deadline.create(epochAdjustment, 2), // 2時間の猶予を持たせる
+                    symbol.Deadline.create(epochAdjustment, 2),
                     [txPayment, txData],
                     networkType,
                     [],
