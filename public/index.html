@@ -299,17 +299,6 @@
                             <span class="hidden xs:inline">ウォレット接続</span>
                         </button>
                     </div>
-                    <!-- Auth Mode Toggle -->
-                    <div class="flex items-center space-x-2 bg-white/5 p-1 rounded-lg border border-white/5">
-                        <button id="mode-sss" onclick="setAuthMode('sss')" class="px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all bg-indigo-500 text-white">SSS</button>
-                        <button id="mode-direct" onclick="setAuthMode('direct')" class="px-3 py-1 rounded text-[8px] font-black tracking-widest transition-all text-slate-500 hover:text-indigo-400">秘密鍵</button>
-                    </div>
-                    <!-- Direct Mode Input Panel -->
-                    <div id="direct-mode-panel" class="hidden absolute top-full right-0 mt-2 w-64 glass p-4 rounded-2xl border border-white/10 z-50">
-                        <input type="password" id="user-private-key" placeholder="秘密鍵 (64桁の16進数)" 
-                               class="w-full bg-white/5 border border-white/5 rounded-lg p-2 text-[10px] font-mono text-white placeholder:text-slate-600 mb-2 outline-none">
-                        <button onclick="connectDirect()" class="w-full py-2 bg-yellow-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">接続</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -971,119 +960,7 @@
             }
         }
 
-        // --- Auth Mode & Direct Mode Logic ---
-        let authMode = 'sss';
-        function setAuthMode(mode) {
-            authMode = mode;
-            document.getElementById('mode-sss').classList.toggle('bg-indigo-500', mode === 'sss');
-            document.getElementById('mode-sss').classList.toggle('text-white', mode === 'sss');
-            document.getElementById('mode-sss').classList.toggle('text-slate-500', mode !== 'sss');
-            
-            document.getElementById('mode-direct').classList.toggle('bg-indigo-500', mode === 'direct');
-            document.getElementById('mode-direct').classList.toggle('text-white', mode === 'direct');
-            document.getElementById('mode-direct').classList.toggle('text-slate-500', mode !== 'direct');
-
-            if (mode === 'direct') {
-                document.getElementById('direct-mode-panel').classList.remove('hidden');
-            } else {
-                document.getElementById('direct-mode-panel').classList.add('hidden');
-            }
-        }
-
-        async function connectDirect() {
-            const privKey = document.getElementById('user-private-key').value;
-            if (!privKey || privKey.length !== 64) {
-                return showToast('正しい秘密鍵を入力してください');
-            }
-
-            try {
-                const networkType = symbol.NetworkType.TEST_NET;
-                const account = symbol.Account.createFromPrivateKey(privKey, networkType);
-                activeAddress = account.address.plain();
-                activePublicKey = account.publicKey;
-                authMode = 'direct'; // 確実にダイレクトモードに設定
-
-                const shortAddr = `${activeAddress.substring(0, 6)}...${activeAddress.substring(activeAddress.length - 4)}`;
-                document.getElementById('connectSssBtn').innerHTML = `<i class="fas fa-key mr-2 text-yellow-400"></i>${shortAddr}`;
-                document.getElementById('connectSssBtn').className = "flex items-center space-x-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest";
-
-                document.getElementById('user-address-short').innerText = activeAddress;
-                document.getElementById('user-avatar').innerText = activeAddress[0];
-                userDashboard.classList.remove('hidden');
-
-                document.getElementById('sell-form').classList.remove('opacity-40', 'pointer-events-none');
-                document.getElementById('connect-prompt').classList.add('hidden');
-                document.getElementById('direct-mode-panel').classList.add('hidden');
-
-                // モード切替UIも更新
-                document.getElementById('mode-sss').classList.remove('bg-indigo-500', 'text-white');
-                document.getElementById('mode-sss').classList.add('text-slate-500');
-                document.getElementById('mode-direct').classList.add('bg-indigo-500', 'text-white');
-                document.getElementById('mode-direct').classList.remove('text-slate-500');
-
-                log(`秘密鍵モードで接続完了: ${activeAddress}`, 'success');
-                showToast('認証されました');
-                updateBalance();
-                renderProducts();
-            } catch (e) {
-                log('秘密鍵が不正です', 'error');
-            }
-        }
-
-        // Modal Logic
-        function openEditModal(p) {
-            document.getElementById('edit-id').value = p.id;
-            document.getElementById('edit-title').value = p.title;
-            document.getElementById('edit-price').value = p.price;
-            document.getElementById('edit-description').value = p.description || "";
-            editModal.classList.remove('hidden');
-        }
-
-        document.getElementById('cancel-edit').onclick = () => editModal.classList.add('hidden');
-        document.getElementById('save-edit').onclick = async () => {
-            const id = document.getElementById('edit-id').value;
-            const body = {
-                title: document.getElementById('edit-title').value,
-                price: document.getElementById('edit-price').value,
-                description: document.getElementById('edit-description').value,
-                requesterAddress: activeAddress
-            };
-
-            const res = await fetch(`/api/products/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-
-            if (res.ok) {
-                showToast('アセット情報を更新しました');
-                editModal.classList.add('hidden');
-                loadProducts();
-            } else {
-                const err = await res.json();
-                alert(err.error);
-            }
-        };
-
-        async function deleteProduct(id) {
-            if (!confirm('このアセットをマーケットから削除しますか？')) return;
-
-            const res = await fetch(`/api/products/${id}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ requesterAddress: activeAddress })
-            });
-
-            if (res.ok) {
-                showToast('アセットを削除しました');
-                loadProducts();
-            } else {
-                const err = await res.json();
-                alert(err.error);
-            }
-        }
-
-        // Wallet Logic
+        // --- Wallet Logic ---
         document.getElementById('connectSssBtn').onclick = async () => {
             log('SSS Identity をスキャン中...');
             let retry = 0;
@@ -1134,26 +1011,21 @@
 
             log(`スワップを開始: ${p.title}`);
             try {
-                // 1. サーバーから必要な設定を取得
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
                 
-                // ネットワークタイプを確実に指定 (Testnet: 152)
                 const networkType = symbol.NetworkType.TEST_NET;
                 const epochAdjustment = 1667250467;
 
-                // 2. 秘密情報を取得
                 const secretRes = await fetch(`/api/products/${p.id}/secret?address=${activeAddress}`);
                 if (!secretRes.ok) throw new Error('アセットデータの取得に失敗しました');
                 const { secret } = await secretRes.json();
 
                 showSwapOverlay('トランザクション構築中', 'アグリゲートトランザクションを構築中...', 30);
 
-                // アカウントオブジェクトの作成
                 const buyerPublicAccount = symbol.PublicAccount.createFromPublicKey(activePublicKey, networkType);
                 const sellerAddress = symbol.Address.createFromRawAddress(p.sellerAddress);
 
-                // 送金トランザクション (買い手 -> 売り手)
                 const txPayment = symbol.TransferTransaction.create(
                     symbol.Deadline.create(epochAdjustment, 2),
                     sellerAddress,
@@ -1162,7 +1034,6 @@
                     networkType
                 ).toAggregate(buyerPublicAccount);
 
-                // データ記録トランザクション (買い手 -> 買い手)
                 const txData = symbol.TransferTransaction.create(
                     symbol.Deadline.create(epochAdjustment, 2),
                     buyerPublicAccount.address,
@@ -1171,7 +1042,6 @@
                     networkType
                 ).toAggregate(buyerPublicAccount);
 
-                // アグリゲートトランザクションとして結合
                 const aggregateTx = symbol.AggregateTransaction.createComplete(
                     symbol.Deadline.create(epochAdjustment, 2),
                     [txPayment, txData],
@@ -1180,26 +1050,15 @@
                     symbol.UInt64.fromUint(200000)
                 );
 
-                showSwapOverlay('署名待機中', authMode === 'sss' ? 'SSSでトランザクションに署名してください' : '秘密鍵で署名を生成中...', 50);
+                showSwapOverlay('署名待機中', 'SSSでトランザクションに署名してください', 50);
                 
-                let signedTx;
-                if (authMode === 'sss') {
-                    window.SSS.setTransaction(aggregateTx);
-                    signedTx = await window.SSS.requestSign();
-                } else {
-                    // 秘密鍵モードでのローカル署名
-                    const privKey = document.getElementById('user-private-key').value.trim();
-                    if (!privKey || privKey.length !== 64) throw new Error('有効な秘密鍵を入力してください');
-                    
-                    const buyerAccount = symbol.Account.createFromPrivateKey(privKey, networkType);
-                    signedTx = buyerAccount.sign(aggregateTx, config.generationHash);
-                }
+                window.SSS.setTransaction(aggregateTx);
+                const signedTx = await window.SSS.requestSign();
 
                 if (!signedTx || !signedTx.payload) throw new Error('署名プロセスが中断されました');
 
                 showSwapOverlay('ブロードキャスト中', 'ネットワークにデータを送信中...', 70);
                 
-                // アナウンス
                 const res = await fetch('/api/purchase_sss', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
