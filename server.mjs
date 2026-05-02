@@ -506,38 +506,52 @@ app.get('/api/config', (req, res) => {
     }
 });
 
-app.post('/api/products', upload.single('file'), async (req, res) => {
+app.post('/api/products', upload.fields([{ name: 'file', maxCount: 1 }, { name: 'image', maxCount: 1 }]), async (req, res) => {
     try {
         console.log(`[POST] /api/products started. Body:`, JSON.stringify(req.body));
         const { title, price, seller, sellerAddress, sellerPublicKey, description, imageUrl, saleType, mosaicId } = req.body;
-        const file = req.file;
+        
+        const file = req.files['file'] ? req.files['file'][0] : null;
+        const imageFile = req.files['image'] ? req.files['image'][0] : null;
         
         if (!file) {
-            console.error("[400] Registration failed: req.file is undefined. Check multipart/form-data config.");
+            console.error("[400] Registration failed: data file is missing.");
             return res.status(400).json({ error: "ファイルがありません。商品には必ずデジタルファイルの添付が必要です。" });
         }
 
-        console.log(`[INFO] Received file: ${file.originalname}, Size: ${file.size}, Path: ${file.path}`);
+        console.log(`[INFO] Received data file: ${file.originalname}, image file: ${imageFile ? imageFile.originalname : 'none'}`);
 
-        // IPFS にアップロードを試みる
+        // データファイルを IPFS にアップロードを試みる
         let ipfsUrl = null;
         try {
             ipfsUrl = await uploadToPinata(file.path, file.originalname);
         } catch (pinataErr) {
-            console.error(`[ERROR] uploadToPinata failed:`, pinataErr);
+            console.error(`[ERROR] uploadToPinata (data) failed:`, pinataErr);
         }
         
-        if (ipfsUrl) {
-            console.log(`[SUCCESS] IPFS Upload: ${ipfsUrl}`);
-        } else {
-            console.log(`[INFO] IPFS Upload skipped or failed, falling back to local storage.`);
+        // サムネイル画像を IPFS にアップロードを試みる
+        let finalImageUrl = imageUrl || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop&q=60";
+        if (imageFile) {
+            try {
+                const uploadedImageUrl = await uploadToPinata(imageFile.path, imageFile.originalname);
+                if (uploadedImageUrl) {
+                    finalImageUrl = uploadedImageUrl;
+                } else {
+                    // ローカルフォールバック
+                    const protocol = req.protocol;
+                    const host = req.get('host');
+                    finalImageUrl = `${protocol}://${host}/uploads/${imageFile.filename}`;
+                }
+            } catch (imageErr) {
+                console.error(`[ERROR] uploadToPinata (image) failed:`, imageErr);
+            }
         }
 
         const protocol = req.protocol;
         const host = req.get('host');
         const secretUrl = ipfsUrl || `${protocol}://${host}/uploads/${file.filename}`;
 
-        console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, using IPFS: ${!!ipfsUrl}`);
+        console.log(`[DEBUG - /api/products] Final secretUrl: ${secretUrl}, finalImageUrl: ${finalImageUrl}`);
 
         const products = await getProducts();
         const newProduct = {
@@ -548,7 +562,7 @@ app.post('/api/products', upload.single('file'), async (req, res) => {
             sellerAddress,
             sellerPublicKey,
             description: description || "",
-            imageUrl: imageUrl || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?w=800&auto=format&fit=crop&q=60",
+            imageUrl: finalImageUrl,
             fileName: file.originalname,
             saleType: saleType || "file",
             mosaicId: mosaicId || null,
