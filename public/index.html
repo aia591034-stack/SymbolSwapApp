@@ -899,9 +899,9 @@
                             </div>
                         </div>
                         <div class="p-6 md:p-10 space-y-6 md:space-y-10">
-                            <p class="text-[10px] md:text-[11px] text-slate-500 leading-relaxed font-medium line-clamp-2 h-8 md:h-10">
+                            <div class="text-[10px] md:text-[11px] text-slate-500 leading-relaxed font-medium overflow-y-auto h-16 md:h-20 pr-2 custom-scrollbar">
                                 ${p.description || "このデジタルアセットには説明がありません。"}
-                            </p>
+                            </div>
                             ${isOwner ? `
                             <div class="flex space-x-2 md:space-x-3">
                                 <button onclick='event.stopPropagation(); openEditModal(${JSON.stringify(p).replace(/'/g, "'")})' class="flex-1 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white/5 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all border border-white/5 shadow-sm">
@@ -1164,6 +1164,75 @@
         };
 
         window.onload = loadProducts;
+
+        // --- Edit & Delete Logic ---
+        window.openEditModal = (p) => {
+            document.getElementById('edit-id').value = p.id;
+            document.getElementById('edit-title').value = p.title;
+            document.getElementById('edit-price').value = p.price;
+            document.getElementById('edit-description').value = p.description || '';
+            editModal.classList.remove('hidden');
+        };
+
+        document.getElementById('cancel-edit').onclick = () => {
+            editModal.classList.add('hidden');
+        };
+
+        document.getElementById('save-edit').onclick = async () => {
+            const id = document.getElementById('edit-id').value;
+            const title = document.getElementById('edit-title').value;
+            const price = document.getElementById('edit-price').value;
+            const description = document.getElementById('edit-description').value;
+
+            if (!activeAddress) return showToast('ウォレットを接続してください');
+
+            try {
+                const res = await fetch(`/api/products/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title,
+                        price,
+                        description,
+                        requesterAddress: activeAddress
+                    })
+                });
+
+                if (res.ok) {
+                    showToast('商品を更新しました');
+                    editModal.classList.add('hidden');
+                    loadProducts();
+                } else {
+                    const data = await res.json();
+                    log(data.error, 'error');
+                }
+            } catch (e) {
+                log(e, 'error');
+            }
+        };
+
+        window.deleteProduct = async (id) => {
+            if (!activeAddress) return showToast('ウォレットを接続してください');
+            if (!confirm('本当にこの商品を削除しますか？')) return;
+
+            try {
+                const res = await fetch(`/api/products/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requesterAddress: activeAddress })
+                });
+
+                if (res.ok) {
+                    showToast('商品を削除しました');
+                    loadProducts();
+                } else {
+                    const data = await res.json();
+                    log(data.error, 'error');
+                }
+            } catch (e) {
+                log(e, 'error');
+            }
+        };
     </script>
 </body>
 
