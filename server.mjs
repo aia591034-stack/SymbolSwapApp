@@ -338,7 +338,7 @@ app.post('/api/claim_bonus', async (req, res) => {
         const { address } = req.body;
         if (!address) return res.status(400).json({ error: "アドレスがありません" });
 
-        // 既に配布済みかチェック
+        // すでに配布済みかチェック
         const bonusKey = `bonus_claimed_${address}`;
         const alreadyClaimed = await kv.get(bonusKey);
         
@@ -346,7 +346,12 @@ app.post('/api/claim_bonus', async (req, res) => {
             return res.status(400).json({ error: "ボーナスは既に配布済みです" });
         }
 
-        console.log(`[BONUS] Sending 500 NXC to: ${address}`);
+        // 先着30名のカウントチェック
+        const countKey = 'pioneer_claim_count';
+        const currentCount = (await kv.get(countKey)) || 0;
+        const isPioneerEligible = currentCount < 30;
+
+        console.log(`[BONUS] Processing bonus for ${address}. Pioneer status: ${isPioneerEligible} (${currentCount}/30)`);
 
         const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
         const operatorKeyPair = new KeyPair(operatorPrivateKey);
@@ -356,17 +361,23 @@ app.post('/api/claim_bonus', async (req, res) => {
         const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
         const deadline = symbolTime;
 
-        // 500 NXC (Divisibility 6 なので 500,000,000)
-        const amount = 500n * 1000000n;
+        // 500 NXC (Divisibility 6)
+        const amountNXC = 500n * 1000000n;
+        const mosaics = [{ mosaicId: toBigInt(CURRENCY_ID), amount: amountNXC }];
+        
+        // 100名以内ならバッジを追加
+        if (isPioneerEligible) {
+            mosaics.push({ mosaicId: toBigInt(PIONEER_MOSAIC_ID), amount: 1n });
+        }
 
         const descriptor = {
             type: 'transfer_transaction_v1',
             signerPublicKey: operatorKeyPair.publicKey,
-            fee: 100000n,
+            fee: 200000n,
             deadline: deadline,
             recipientAddress: address,
-            mosaics: [{ mosaicId: toBigInt(CURRENCY_ID), amount: amount }],
-            message: new Uint8Array([0, ...Buffer.from('Nexus Welcome Bonus! 500 NXC')])
+            mosaics: mosaics,
+            message: new Uint8Array([0, ...Buffer.from(isPioneerEligible ? 'Nexus Welcome! 500 NXC + Pioneer Badge' : 'Nexus Welcome! 500 NXC')])
         };
 
         const tx = facade.transactionFactory.create(descriptor);
@@ -384,7 +395,15 @@ app.post('/api/claim_bonus', async (req, res) => {
         if (response.ok) {
             // 配布済みフラグを保存
             await kv.set(bonusKey, true);
-            res.json({ success: true, message: "500 NXC を配布しました！" });
+            // カウントをインクリメント（バッジを配った場合のみ）
+            if (isPioneerEligible) {
+                await kv.set(countKey, currentCount + 1);
+            }
+            res.json({ 
+                success: true, 
+                isPioneer: isPioneerEligible,
+                message: isPioneerEligible ? "500 NXC と Pioneerバッジを配布しました！" : "500 NXC を配布しました！" 
+            });
         } else {
             const errorData = await response.json();
             res.status(500).json({ error: "配布に失敗しました", details: errorData });

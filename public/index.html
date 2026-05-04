@@ -425,9 +425,12 @@
                                 class="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl md:text-2xl font-black shadow-lg shadow-indigo-500/20">
                                 ?
                             </div>
-                            <div>
-                                <h3 class="font-black text-base md:text-lg leading-none mb-2 text-white">認証済み
-                                </h3>
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <h3 id="user-rank" class="font-black text-base md:text-lg leading-none text-white">Guest</h3>
+                                    <span id="pioneer-badge" class="hidden bg-gradient-to-r from-amber-400 to-amber-600 text-black px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-tighter shadow-lg shadow-amber-500/20">
+                                        <i class="fas fa-crown mr-1"></i>GENESIS
+                                    </span>
+                                </div>
                                 <p id="user-address-short"
                                     class="text-[8px] md:text-[10px] font-black text-slate-500 tracking-widest uppercase truncate w-24 md:w-32">
                                     未接続
@@ -874,6 +877,23 @@
                     xymBalanceEl.innerText = Number(nxcAmount).toLocaleString(undefined, { minimumFractionDigits: 2 });
                     balanceDisplay.classList.remove('hidden');
 
+                    // ランク判定
+                    let rank = "Novice";
+                    let rankClass = "text-white";
+                    if (nxcAmount >= 10000n) {
+                        rank = "Nexus Overlord";
+                        rankClass = "text-purple-400";
+                    } else if (nxcAmount >= 5000n) {
+                        rank = "Whale";
+                        rankClass = "text-cyan-400";
+                    } else if (nxcAmount >= 1000n) {
+                        rank = "Active";
+                        rankClass = "text-indigo-400";
+                    }
+                    const rankEl = document.getElementById('user-rank');
+                    rankEl.innerText = rank;
+                    rankEl.className = `font-black text-base md:text-lg leading-none ${rankClass}`;
+
                     // Nexus Pioneer (NXP) バッジチェック
                     const nxp = data.account.mosaics.find(m => m.id === '4E3FD79DC36A6474');
                     if (nxp && BigInt(nxp.amount) > 0n) {
@@ -1067,8 +1087,14 @@
                             body: JSON.stringify({ address: activeAddress })
                         });
                         if (bonusRes.ok) {
-                            showToast('初回ボーナス 500 NXC を配布しました！');
-                            log('Welcome Bonus 獲得！', 'success');
+                            const bonusData = await bonusRes.json();
+                            if (bonusData.isPioneer) {
+                                showToast('Welcome Bonus 獲得！ 500 NXC + Pioneerバッジ');
+                                log('先着100名特典：初回ボーナス（500 NXC & Pioneer Badge）を配布しました！', 'success');
+                            } else {
+                                showToast('Welcome Bonus 獲得！ 500 NXC');
+                                log('初回ボーナス（500 NXC）を配布しました！', 'success');
+                            }
                         }
                     } catch (e) {
                         console.log('Bonus already claimed or error:', e);
