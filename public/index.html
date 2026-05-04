@@ -1198,19 +1198,39 @@
                     const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
                     const data = await res.json();
 
-                    if (data.group === 'confirmed') {
-                        clearInterval(interval);
-                        document.getElementById('node-seller').classList.add('active');
-                        showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
+                        if (data.group === 'confirmed') {
+                            clearInterval(interval);
+                            document.getElementById('node-seller').classList.add('active');
+                            showSwapOverlay('Success', 'アトミックスワップが正常に完了しました！', 100);
 
-                        log('Swap validated by consensus', 'success');
-                        showToast('Asset unlocked successfully');
+                            log('Swap validated by consensus', 'success');
+                            showToast('Asset unlocked successfully');
 
-                        localStorage.setItem(`purchased_${p.id}`, 'true');
-                        updateBalance();
-                        renderProducts();
-                        hideSwapOverlay();
-                    } else if (data.group === 'failed' || data.code) {
+                            localStorage.setItem(`purchased_${p.id}`, 'true');
+
+                            // 売上実績の記録と昇格チェック
+                            try {
+                                const recordRes = await fetch('/api/record_sale', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ 
+                                        hash: hash, 
+                                        productId: p.id, 
+                                        sellerAddress: p.sellerAddress 
+                                    })
+                                });
+                                const recordData = await recordRes.json();
+                                if (recordData.promoted) {
+                                    log(`[PROMOTION] 出品者の ${p.sellerAddress.substring(0,6)}... さんが Pioneer に昇格しました！`, 'success');
+                                }
+                            } catch (e) {
+                                console.error('Failed to record sale achievement:', e);
+                            }
+
+                            updateBalance();
+                            renderProducts();
+                            hideSwapOverlay();
+                        } else if (data.group === 'failed' || data.code) {
                         // エラーコードがある場合は即座に停止して表示
                         if (data.code !== 'Success') {
                             clearInterval(interval);

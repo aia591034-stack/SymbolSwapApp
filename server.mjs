@@ -332,6 +332,105 @@ app.post('/api/announce_transaction', async (req, res) => {
     // ... (既存のコード)
 });
 
+// 売上を記録し、一定条件で Pioneer に昇格させるエンドポイント
+app.post('/api/record_sale', async (req, res) => {
+    try {
+        const { hash, productId, sellerAddress } = req.body;
+        if (!hash || !sellerAddress) return res.status(400).json({ error: "パラメータが不足しています" });
+
+        // 重複記録の防止
+        const saleRecordKey = `sale_recorded_${hash}`;
+        if (await kv.get(saleRecordKey)) return res.json({ success: true, message: "記録済みです" });
+
+        // トランザクションの検証（簡易版：ノードに問い合わせて確認済みかチェック）
+        const nodeRes = await fetch(`${NODE_URL}/transactionStatus/${hash}`);
+        const status = await nodeRes.json();
+        if (status.group !== 'confirmed') {
+            return res.status(400).json({ error: "トランザクションがまだ承認されていません" });
+        }
+
+        // 商品情報の取得（価格計算のため）
+        const products = await getProducts();
+        const p = products.find(item => item.id.toString() === productId.toString());
+        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
+
+        // 実績の加算
+        const countKey = `user_sales_count_${sellerAddress}`;
+        const amountKey = `user_sales_amount_${sellerAddress}`;
+        
+        const newCount = (Number(await kv.get(countKey)) || 0) + 1;
+        const newAmount = (Number(await kv.get(amountKey)) || 0) + p.price;
+
+        await kv.set(countKey, newCount);
+        await kv.set(amountKey, newAmount);
+        await kv.set(saleRecordKey, true);
+
+        console.log(`[ACHIEVEMENT] Seller ${sellerAddress}: Count=${newCount}, Amount=${newAmount}`);
+
+        // Pioneer 昇格チェック (30回販売 または 50,000 NXC)
+        const meritPioneerKey = `pioneer_merit_${sellerAddress}`;
+        const welcomePioneerKey = `bonus_claimed_${sellerAddress}`; // Welcomeボーナスで既に持ってるか
+        
+        const alreadyPioneer = await kv.get(meritPioneerKey) || await kv.get(welcomePioneerKey);
+        
+        let promoted = false;
+        if (!alreadyPioneer && (newCount >= 30 || newAmount >= 50000)) {
+            console.log(`[PROMOTION] Promoting ${sellerAddress} to Pioneer by Merit!`);
+            
+            // バッジ送金トランザクションの実行
+            const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+            const operatorKeyPair = new KeyPair(operatorPrivateKey);
+            const symbolTime = BigInt(Date.now() - 1667250467 * 1000 + 7200000);
+
+            const descriptor = {
+                type: 'transfer_transaction_v1',
+                signerPublicKey: operatorKeyPair.publicKey,
+                fee: 100000n,
+                deadline: symbolTime,
+                recipientAddress: sellerAddress,
+                mosaics: [{ mosaicId: toBigInt(PIONEER_MOSAIC_ID), amount: 1n }],
+                message: new Uint8Array([0, ...Buffer.from('Merit Achievement: Nexus Pioneer Promotion!')])
+            };
+
+            const tx = facade.transactionFactory.create(descriptor);
+            const sig = facade.signTransaction(operatorKeyPair, tx);
+            tx.signature = new models.Signature(sig.bytes);
+
+            await fetch(`${NODE_URL}/transactions`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload: utils.uint8ToHex(tx.serialize()) })
+            });
+
+            await kv.set(meritPioneerKey, true);
+            promoted = true;
+        }
+
+        res.json({ 
+            success: true, 
+            count: newCount, 
+            amount: newAmount, 
+            promoted: promoted 
+        });
+
+    } catch (error) {
+        console.error("Record Sale Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 各ユーザーの販売実績を取得するエンドポイント
+app.get('/api/achievements/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+        const count = await kv.get(`user_sales_count_${address}`) || 0;
+        const amount = await kv.get(`user_sales_amount_${address}`) || 0;
+        res.json({ count, amount });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // プランA: 新規ユーザーへの初回ボーナス配布エンドポイント
 app.post('/api/claim_bonus', async (req, res) => {
     try {
