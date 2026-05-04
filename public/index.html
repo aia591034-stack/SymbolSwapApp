@@ -318,40 +318,64 @@
                         <div class="flex items-center justify-center md:justify-start space-x-3 mb-6 md:mb-8">
                             <span class="w-6 md:w-8 h-px bg-indigo-500"></span>
                             <span
-                                class="text-indigo-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em]">Next
-                                Gen
-                                Protocol</span>
+                                class="text-indigo-400 text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em]">Trustless
+                                Asset
+                                Hub</span>
                         </div>
                         <h1 class="text-4xl md:text-6xl font-black mb-6 md:mb-8 leading-[1.1] tracking-tighter">
-                            デジタル資産を<br /><span class="gradient-text">真の所有へ</span>
+                            仲介者のいない<br /><span class="gradient-text">自由な取引を</span>
                         </h1>
                         <p class="text-slate-400 text-sm md:text-lg leading-relaxed mb-8 md:mb-12 font-medium">
-                            Symbolのアトミックスワップ技術で、あなたのデジタル資産を安全に取引。
-                            仲介者を排除し、価値が直接つながるトラストレスなマーケットプレイス。
+                            AETHER MARKETは、Symbolブロックチェーンの技術で「支払い」と「受け取り」を同時に完結させる、安全なP2Pマーケットプレイスです。
                         </p>
 
                         <div
                            class="flex flex-col md:flex-row items-center justify-center md:justify-start space-y-6 md:space-y-0 md:space-x-8">
                            <button onclick="document.getElementById('market-section').scrollIntoView({ behavior: 'smooth' })"
-                               class="btn-primary w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-widest text-white uppercase">マーケットを探索</button>
-                           <div class="flex items-center space-x-3">
-                               <span
-                                   class="text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">テストネットで稼働中</span>
-                           </div>
+                               class="btn-primary w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-widest text-white uppercase shadow-xl shadow-indigo-500/20">商品をチェック</button>
+                           <button onclick="openGuide('platform')"
+                               class="w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 text-[10px] md:text-xs font-black tracking-widest text-white uppercase hover:bg-white/10 transition-all">使い方ガイド</button>
                         </div>
-                        </div>
+                    </div>
 
-                        <!-- Animated Background -->
-                        <div class="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-20 md:opacity-30 floating">
+                    <!-- Animated Background -->
+                    <div class="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-20 md:opacity-30 floating">
                         <div
-                           class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 md:w-96 h-64 md:h-96 bg-indigo-500 rounded-full blur-[80px] md:blur-[120px]">
+                            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 md:w-96 h-64 md:h-96 bg-indigo-500 rounded-full blur-[80px] md:blur-[120px]">
                         </div>
                         <div
-                           class="absolute top-1/3 left-2/3 -translate-x-1/2 -translate-y-1/2 w-48 md:w-64 h-48 md:h-64 bg-purple-500 rounded-full blur-[60px] md:blur-[100px]">
+                            class="absolute top-1/3 left-2/3 -translate-x-1/2 -translate-y-1/2 w-48 md:w-64 h-48 md:h-64 bg-purple-500 rounded-full blur-[60px] md:blur-[100px]">
                         </div>
-                        </div>
-                        </section>
+                    </div>
+                </section>
 
+                <!-- How it Works (Visual Steps) -->
+                <section class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8" data-aos="fade-up">
+                    <div class="glass-card p-8 rounded-[2rem] space-y-4 border-white/5 relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 text-white/5 text-6xl font-black italic group-hover:text-indigo-500/10 transition-colors">01</div>
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                            <i class="fas fa-wallet text-xl"></i>
+                        </div>
+                        <h3 class="font-black text-white text-sm tracking-widest uppercase">1. 接続</h3>
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed">SSSウォレットを接続。テストネットのXYMを準備します。</p>
+                    </div>
+                    <div class="glass-card p-8 rounded-[2rem] space-y-4 border-white/5 relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 text-white/5 text-6xl font-black italic group-hover:text-purple-500/10 transition-colors">02</div>
+                        <div class="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                            <i class="fas fa-bolt text-xl"></i>
+                        </div>
+                        <h3 class="font-black text-white text-sm tracking-widest uppercase">2. スワップ</h3>
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed">商品を選び「スワップ実行」をクリック。支払と同時に商品がアンロックされます。</p>
+                    </div>
+                    <div class="glass-card p-8 rounded-[2rem] space-y-4 border-white/5 relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 text-white/5 text-6xl font-black italic group-hover:text-emerald-500/10 transition-colors">03</div>
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                            <i class="fas fa-cloud-download-alt text-xl"></i>
+                        </div>
+                        <h3 class="font-black text-white text-sm tracking-widest uppercase">3. 取得</h3>
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed">承認後、購入済みアイテムからファイルを安全にダウンロード可能です。</p>
+                    </div>
+                </section>
                         <!-- Market Header & Filters -->
                         <section id="market-section" class="space-y-8 md:space-y-10" data-aos="fade-up">                    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-8">
                         <div class="text-center md:text-left">
