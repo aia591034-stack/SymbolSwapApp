@@ -275,15 +275,11 @@
                 </div>
 
                 <div class="flex items-center space-x-1 md:space-x-2">
-                    <button onclick="openGuide('platform')"
-                        class="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-white/10 transition-all border border-white/5 shadow-sm"
-                        title="プラットフォームの使い方">
-                        <i class="fas fa-question-circle text-sm md:text-base"></i>
-                    </button>
-                    <button onclick="openGuide('sss')"
-                        class="w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-white/10 transition-all border border-white/5 shadow-sm"
-                        title="SSSウォレットの使い方">
-                        <i class="fas fa-fingerprint text-sm md:text-base"></i>
+                    <button onclick="openGuide()"
+                        class="px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl bg-white/5 flex items-center space-x-2 text-slate-400 hover:text-indigo-400 hover:bg-white/10 transition-all border border-white/5 shadow-sm"
+                        title="使い方ガイド">
+                        <i class="fas fa-book-open text-sm md:text-base"></i>
+                        <span class="text-[10px] md:text-xs font-black uppercase tracking-widest hidden sm:inline">使い方ガイド</span>
                     </button>
                 </div>
 
@@ -713,89 +709,91 @@
         let allProducts = [];
 
         // Guide Modal Logic
-        function openGuide(type) {
-            let html = '';
-            if (type === 'platform') {
-                html = `
-                    <div class="space-y-8 md:space-y-12">
-                        <div class="text-center">
-                            <h2 class="text-2xl md:text-4xl font-black tracking-tighter gradient-text mb-2 md:mb-4">AETHER MARKET GUIDE</h2>
-                            <p class="text-[10px] md:text-sm text-slate-400 font-medium">信頼不要のデジタル資産取引プラットフォーム</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-indigo-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-indigo-400">
-                                    <i class="fas fa-shield-alt text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">アトミックスワップ</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">代金の支払いと商品の受け取りを、ブロックチェーン上で同時に実行します。どちらか一方が行われない限り、取引は成立しません。</p>
-                            </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-purple-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-purple-400">
-                                    <i class="fas fa-lock text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">セキュアなデータ管理</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">購入したファイルは、あなたのウォレットアドレスで認証された場合のみダウンロード可能です。外部からの直接アクセスは遮断されています。</p>
-                            </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-pink-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-pink-400">
-                                    <i class="fas fa-rocket text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">即時デプロイ</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">デジタルアセットをアップロードし、価格を設定するだけで、即座にグローバルマーケットプレイスへ公開されます。</p>
-                            </div>
-                            <div class="glass-card p-6 md:p-8 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4">
-                                <div class="w-10 h-10 md:w-12 md:h-12 bg-emerald-500/20 rounded-xl md:rounded-2xl flex items-center justify-center text-emerald-400">
-                                    <i class="fas fa-sync-alt text-lg md:text-xl"></i>
-                                </div>
-                                <h3 class="font-black text-white uppercase tracking-widest text-xs">リアルタイム進捗</h3>
-                                <p class="text-[10px] md:text-xs text-slate-500 leading-relaxed">取引の各ステップ（署名、アナウンス、承認）は、専用のオーバーレイによってリアルタイムで可視化されます。</p>
-                            </div>
-                        </div>
+        function openGuide() {
+            let html = `
+                <div class="space-y-12">
+                    <div class="text-center">
+                        <h2 class="text-3xl md:text-5xl font-black tracking-tighter gradient-text mb-4">USAGE GUIDE</h2>
+                        <p class="text-xs md:text-base text-slate-400 font-medium tracking-widest uppercase">AETHER MARKET 活用マニュアル</p>
                     </div>
-                `;
-            } else if (type === 'sss') {
-                html = `
-                    <div class="space-y-8 md:space-y-12">
-                        <div class="text-center">
-                            <h2 class="text-2xl md:text-4xl font-black tracking-tighter text-indigo-400 mb-2 md:mb-4">SSS WALLET GUIDE</h2>
-                            <p class="text-[10px] md:text-sm text-slate-400 font-medium">Symbol Service Sidekick の導入と活用</p>
+                    
+                    <!-- Section 1: Preparation -->
+                    <div class="space-y-6">
+                        <div class="flex items-center space-x-4 border-b border-white/10 pb-4">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-black">01</div>
+                            <h3 class="text-xl font-black text-white uppercase tracking-wider">事前準備：ウォレットとテストネット</h3>
                         </div>
-                        
-                        <div class="space-y-4 md:space-y-6">
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">1</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">拡張機能のインストール</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">Chrome ウェブストアから「SSS Extension」を検索してインストールします。</p>
-                                </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="glass-card p-6 rounded-2xl space-y-4">
+                                <h4 class="font-black text-indigo-400 text-xs uppercase tracking-widest">SSSウォレットの導入</h4>
+                                <p class="text-[10px] md:text-xs text-slate-400 leading-relaxed">
+                                    Chromeウェブストアから「SSS Extension」をインストールします。これはSymbolブロックチェーンと対話するためのブラウザ拡張機能です。
+                                </p>
+                                <a href="https://chromewebstore.google.com/detail/sss-extension/llildamgegahgcbeihbhonidibdaocbh" target="_blank" class="inline-block text-[9px] font-black text-white bg-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-500 transition-colors uppercase">ストアで確認</a>
                             </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">2</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">アカウントの登録 / インポート</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">既存のSymbolアカウント（秘密鍵）をインポートするか、新しく作成します。Testnet用のアカウントを用意してください。</p>
-                                </div>
-                            </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">3</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">AETHER MARKET への接続</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">右上の「CONNECT WALLET」ボタンをクリック。SSSのポップアップで許可を与えると、マーケットと同期されます。</p>
-                                </div>
-                            </div>
-                            <div class="flex items-start space-x-4 md:space-x-6 bg-white/5 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white/5">
-                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs md:text-sm">4</div>
-                                <div class="space-y-1 md:space-y-2">
-                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px] md:text-xs">安全な署名</h4>
-                                    <p class="text-[10px] md:text-xs text-slate-500">取引の際はSSSが内容を検証し、あなたの承認（署名）を求めます。秘密鍵をサイトに渡すことなく、安全に取引を完了できます。</p>
+                            <div class="glass-card p-6 rounded-2xl space-y-4">
+                                <h4 class="font-black text-indigo-400 text-xs uppercase tracking-widest">テストネットとは？</h4>
+                                <p class="text-[10px] md:text-xs text-slate-400 leading-relaxed">
+                                    本物のお金（XYM）を使わずに、安全に取引を試せるネットワークです。アカウント作成時に「TESTNET」を選択してください。
+                                </p>
+                                <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                                    <p class="text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">テスト用コイン(XYM)を入手</p>
+                                    <a href="https://testnet.symbol.tools/" target="_blank" class="text-indigo-400 hover:text-indigo-300 text-[10px] font-bold underline">Faucet（蛇口）サイトへ</a>
                                 </div>
                             </div>
                         </div>
                     </div>
-                `;
-            }
+
+                    <!-- Section 2: How to Trade -->
+                    <div class="space-y-6">
+                        <div class="flex items-center space-x-4 border-b border-white/10 pb-4">
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 font-black">02</div>
+                            <h3 class="text-xl font-black text-white uppercase tracking-wider">取引の流れ</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex items-start space-x-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div class="w-8 h-8 rounded-full bg-purple-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs">1</div>
+                                <div class="space-y-1">
+                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px]">ウォレット接続</h4>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">右上の「CONNECT WALLET」ボタンからSSSを連携します。</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start space-x-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div class="w-8 h-8 rounded-full bg-purple-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs">2</div>
+                                <div class="space-y-1">
+                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px]">アトミックスワップ実行</h4>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">商品カードの「スワップを実行」をクリック。SSSのポップアップで署名（承認）を行います。これにより支払いと商品受け取りが同時に予約されます。</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start space-x-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div class="w-8 h-8 rounded-full bg-purple-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs">3</div>
+                                <div class="space-y-1">
+                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px]">検証とアンロック</h4>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">ブロックチェーン上で取引が承認（約30秒〜1分）されると、商品があなたのものになります。</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start space-x-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div class="w-8 h-8 rounded-full bg-purple-500 flex-shrink-0 flex items-center justify-center text-white font-black text-xs">4</div>
+                                <div class="space-y-1">
+                                    <h4 class="font-black text-white uppercase tracking-widest text-[10px]">データのダウンロード</h4>
+                                    <p class="text-[10px] text-slate-500 leading-relaxed">購入した商品はカードの表示が「データを取得」に変わります。クリックしてファイルを安全に保存してください。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Safe Technology -->
+                    <div class="glass-card p-8 rounded-[2.5rem] bg-indigo-500/5 border-indigo-500/10">
+                        <div class="flex items-center space-x-4 mb-4">
+                            <i class="fas fa-shield-check text-indigo-400 text-2xl"></i>
+                            <h3 class="text-lg font-black text-white uppercase tracking-widest">TRUSTLESS TECHNOLOGY</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed font-medium">
+                            このプラットフォームは運営者を介しません。すべての取引はSymbolブロックチェーン上のスマートコントラクト（アグリゲートトランザクション）によって管理され、不正や持ち逃げが不可能な仕組みになっています。
+                        </p>
+                    </div>
+                </div>
+            `;
             guideContent.innerHTML = html;
             guideModal.classList.remove('hidden');
         }
