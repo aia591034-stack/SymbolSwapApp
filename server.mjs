@@ -169,14 +169,14 @@ try {
     console.error("SymbolFacade initialization failed!", e);
 }
 
+// --- ネットワーク・通貨設定 ---
+const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
+const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
 const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
 
 const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
 };
-
-let CURRENCY_ID = process.env.CURRENCY_ID || '51138C86FBF19505'; 
-const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474';
 
 // 16進数文字列を安全に BigInt に変換するヘルパー
 const toBigInt = (val) => {
