@@ -586,8 +586,22 @@
                 </div>
                 <div class="space-y-3">
                     <label
-                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">サムネイル画像 URL</label>
-                    <input type="text" id="edit-imageUrl"
+                        class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">サムネイル画像</label>
+                    <div class="relative group">
+                        <input type="file" id="edit-imageFile" accept="image/*"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div
+                            class="w-full px-5 md:px-6 py-4 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl flex items-center space-x-4 group-hover:bg-indigo-500/5 transition-all">
+                            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-500 group-hover:text-indigo-500">
+                                <i class="fas fa-image"></i>
+                            </div>
+                            <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest truncate" id="edit-image-name-display">新しい画像をアップロード</span>
+                        </div>
+                    </div>
+                    <div class="text-center py-1">
+                        <span class="text-[8px] font-black text-slate-600 uppercase tracking-widest">OR</span>
+                    </div>
+                    <input type="text" id="edit-imageUrl" placeholder="画像URLを直接入力"
                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-[10px] text-white">
                 </div>
                 <div class="space-y-3">
@@ -1212,31 +1226,42 @@
             editModal.classList.add('hidden');
         };
 
+        document.getElementById('edit-imageFile').onchange = (e) => {
+            const fileName = e.target.files[0]?.name || '新しい画像をアップロード';
+            document.getElementById('edit-image-name-display').innerText = fileName;
+        };
+
         document.getElementById('save-edit').onclick = async () => {
             const id = document.getElementById('edit-id').value;
             const title = document.getElementById('edit-title').value;
             const imageUrl = document.getElementById('edit-imageUrl').value;
             const price = document.getElementById('edit-price').value;
             const description = document.getElementById('edit-description').value;
+            const imageFile = document.getElementById('edit-imageFile').files[0];
 
             if (!activeAddress) return showToast('ウォレットを接続してください');
 
             try {
+                const formData = new FormData();
+                formData.append('title', title);
+                formData.append('price', price);
+                formData.append('description', description);
+                formData.append('imageUrl', imageUrl);
+                formData.append('requesterAddress', activeAddress);
+                if (imageFile) {
+                    formData.append('image', imageFile);
+                }
+
                 const res = await fetch(`/api/products/${id}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title,
-                        price,
-                        description,
-                        imageUrl,
-                        requesterAddress: activeAddress
-                    })
+                    body: formData // Content-Type は FormData の場合、自動で設定されます
                 });
 
                 if (res.ok) {
                     showToast('商品を更新しました');
                     editModal.classList.add('hidden');
+                    document.getElementById('edit-imageFile').value = '';
+                    document.getElementById('edit-image-name-display').innerText = '新しい画像をアップロード';
                     loadProducts();
                 } else {
                     const data = await res.json();

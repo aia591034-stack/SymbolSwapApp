@@ -580,10 +580,12 @@ app.post('/api/products', upload.fields([{ name: 'file', maxCount: 1 }, { name: 
 });
 
 // 商品の編集
-app.patch('/api/products/:id', async (req, res) => {
+app.patch('/api/products/:id', upload.single('image'), async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { title, price, description, imageUrl, requesterAddress, saleType, mosaicId } = req.body;
+        const imageFile = req.file;
+
         const products = await getProducts();
         const index = products.findIndex(p => p.id === id);
 
@@ -601,9 +603,28 @@ app.patch('/api/products/:id', async (req, res) => {
         if (title) product.title = title;
         if (price) product.price = parseInt(price);
         if (description) product.description = description;
-        if (imageUrl) product.imageUrl = imageUrl;
         if (saleType) product.saleType = saleType;
         if (mosaicId) product.mosaicId = mosaicId;
+
+        // 画像の更新ロジック
+        if (imageFile) {
+            // 新しいファイルがアップロードされた場合
+            try {
+                const uploadedImageUrl = await uploadToPinata(imageFile.path, imageFile.originalname);
+                if (uploadedImageUrl) {
+                    product.imageUrl = uploadedImageUrl;
+                } else {
+                    const protocol = req.protocol;
+                    const host = req.get('host');
+                    product.imageUrl = `${protocol}://${host}/uploads/${imageFile.filename}`;
+                }
+            } catch (imageErr) {
+                console.error(`[ERROR] Edit uploadToPinata failed:`, imageErr);
+            }
+        } else if (imageUrl) {
+            // URLが直接指定された場合
+            product.imageUrl = imageUrl;
+        }
 
         await saveProducts(products);
         res.json({ success: true, product });
