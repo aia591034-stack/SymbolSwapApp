@@ -1049,7 +1049,7 @@
         document.getElementById('connectSssBtn').onclick = async () => {
             log('SSS Identity をスキャン中...');
             let retry = 0;
-            const check = setInterval(() => {
+            const check = setInterval(async () => {
                 if (window.SSS) {
                     clearInterval(check);
                     activeAddress = window.SSS.activeAddress;
