@@ -867,10 +867,20 @@
                 const res = await fetch(`${nodeUrl}/accounts/${activeAddress}`);
                 if (res.ok) {
                     const data = await res.json();
-                    const xym = data.account.mosaics.find(m => m.id === '72C0212E67A08BCE');
-                    const amount = xym ? (BigInt(xym.amount) / 1000000n) : 0n;
-                    xymBalanceEl.innerText = Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
+                    
+                    // Nexus Credit (NXC)
+                    const nxc = data.account.mosaics.find(m => m.id === '51138C86FBF19505');
+                    const nxcAmount = nxc ? (BigInt(nxc.amount) / 1000000n) : 0n;
+                    xymBalanceEl.innerText = Number(nxcAmount).toLocaleString(undefined, { minimumFractionDigits: 2 });
                     balanceDisplay.classList.remove('hidden');
+
+                    // Nexus Pioneer (NXP) バッジチェック
+                    const nxp = data.account.mosaics.find(m => m.id === '4E3FD79DC36A6474');
+                    if (nxp && BigInt(nxp.amount) > 0n) {
+                        document.getElementById('pioneer-badge').classList.remove('hidden');
+                    } else {
+                        document.getElementById('pioneer-badge').classList.add('hidden');
+                    }
                 }
             } catch (e) {
                 console.error('Balance update error:', e);
@@ -1048,6 +1058,22 @@
 
                     log(`接続済み: ${activeAddress}`, 'success');
                     showToast('Nexus へようこそ');
+                    
+                    // ボーナスの申請
+                    try {
+                        const bonusRes = await fetch('/api/claim_bonus', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ address: activeAddress })
+                        });
+                        if (bonusRes.ok) {
+                            showToast('初回ボーナス 500 NXC を配布しました！');
+                            log('Welcome Bonus 獲得！', 'success');
+                        }
+                    } catch (e) {
+                        console.log('Bonus already claimed or error:', e);
+                    }
+
                     updateBalance();
                     renderProducts();
                 }

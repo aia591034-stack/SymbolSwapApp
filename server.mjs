@@ -175,7 +175,8 @@ const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
 };
 
-let CURRENCY_ID = process.env.CURRENCY_ID || '72C0212E67A08BCE'; 
+let CURRENCY_ID = process.env.CURRENCY_ID || '51138C86FBF19505'; 
+const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474';
 
 // 16進数文字列を安全に BigInt に変換するヘルパー
 const toBigInt = (val) => {
@@ -328,67 +329,69 @@ app.post('/api/build_transaction', async (req, res) => {
 
 // 署名を結合してアナウンスするエンドポイント
 app.post('/api/announce_transaction', async (req, res) => {
+    // ... (既存のコード)
+});
+
+// プランA: 新規ユーザーへの初回ボーナス配布エンドポイント
+app.post('/api/claim_bonus', async (req, res) => {
     try {
-        const { payload, cosignatures } = req.body;
+        const { address } = req.body;
+        if (!address) return res.status(400).json({ error: "アドレスがありません" });
 
-            console.log(`[DEBUG] Received payload from client: ${payload.substring(0, 100)}...`);
-            console.log(`[DEBUG] Received cosignatures from client: ${JSON.stringify(cosignatures)}`);
-
-            if (!payload) {
-                return res.status(400).json({ success: false, error: "Payload is required" });
-            }
-
-        // 【究極の修正】取引を再構築せず、クライアントから送られたペイロードを直接デシリアライズする。
-        // これにより、署名時のデータ（DeadlineやMerkleRoot等）が100%保持されます。
-        const aggregateTx = models.AggregateCompleteTransactionV2.deserialize(utils.hexToUint8(payload));
-
-        // クライアントからのコサイン署名を追加
-        if (cosignatures && Array.isArray(cosignatures)) {
-            cosignatures.forEach(cs => {
-                if (!cs.signerPublicKey || !cs.signature) return;
-                const cosignature = new models.Cosignature();
-                cosignature.version = 0n;
-                cosignature.signerPublicKey = new models.PublicKey(utils.hexToUint8(cs.signerPublicKey));
-                cosignature.signature = new models.Signature(utils.hexToUint8(cs.signature));
-                aggregateTx.cosignatures.push(cosignature);
-            });
+        // 既に配布済みかチェック
+        const bonusKey = `bonus_claimed_${address}`;
+        const alreadyClaimed = await kv.get(bonusKey);
+        
+        if (alreadyClaimed) {
+            return res.status(400).json({ error: "ボーナスは既に配布済みです" });
         }
 
-        // 最終的なペイロードとハッシュを作成
-        const finalPayload = utils.uint8ToHex(aggregateTx.serialize());
-        const finalHash = facade.hashTransaction(aggregateTx).toString();
+        console.log(`[BONUS] Sending 500 NXC to: ${address}`);
 
-        console.log(`[INFO] Announcing transaction. Hash: ${finalHash}`);
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        
+        const networkType = facade.network.identifier;
+        const epochAdjustment = 1667250467;
+        const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
+        const deadline = symbolTime;
 
-        // ノードにアナウンス
-        console.log(`[DEBUG - /api/announce_transaction] Sending finalPayload to node: ${NODE_URL}/transactions`);
-        console.log(`[DEBUG - /api/announce_transaction] Final payload body: ${finalPayload.substring(0, 100)}...`);
+        // 500 NXC (Divisibility 6 なので 500,000,000)
+        const amount = 500n * 1000000n;
+
+        const descriptor = {
+            type: 'transfer_transaction_v1',
+            signerPublicKey: operatorKeyPair.publicKey,
+            fee: 100000n,
+            deadline: deadline,
+            recipientAddress: address,
+            mosaics: [{ mosaicId: toBigInt(CURRENCY_ID), amount: amount }],
+            message: new Uint8Array([0, ...Buffer.from('Nexus Welcome Bonus! 500 NXC')])
+        };
+
+        const tx = facade.transactionFactory.create(descriptor);
+        const sig = facade.signTransaction(operatorKeyPair, tx);
+        tx.signature = new models.Signature(sig.bytes);
+
+        const payload = utils.uint8ToHex(tx.serialize());
+
         const response = await fetch(`${NODE_URL}/transactions`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload: finalPayload }) // combinedPayload を finalPayload に修正
+            body: JSON.stringify({ payload })
         });
 
-        const responseText = await response.text();
-        console.log(`[DEBUG - /api/announce_transaction] Node response status: ${response.status}`);
-        console.log(`[DEBUG - /api/announce_transaction] Node response text: ${responseText}`);
-
         if (response.ok) {
-            res.json({ success: true, message: "トランザクションを送信しました", hash: finalHash });
+            // 配布済みフラグを保存
+            await kv.set(bonusKey, true);
+            res.json({ success: true, message: "500 NXC を配布しました！" });
         } else {
-            let errorDetails = responseText;
-            try {
-                const errorJson = JSON.parse(responseText);
-                errorDetails = errorJson.message || errorJson.code || responseText;
-            } catch (e) {
-                // JSONパースエラーの場合はそのままテキストを使用
-            }
-            console.error(`[ERROR] Node announcement failed: ${errorDetails}`);
-            res.status(response.status).json({ success: false, error: `Announce Error: ${errorDetails}` });
+            const errorData = await response.json();
+            res.status(500).json({ error: "配布に失敗しました", details: errorData });
         }
     } catch (error) {
-        console.error("Announce Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Bonus Error:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 
