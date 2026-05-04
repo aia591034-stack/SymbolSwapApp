@@ -271,7 +271,7 @@
                     <span
                         class="text-[8px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest hidden md:inline">クレジット</span>
                     <span id="xym-balance" class="text-xs md:text-sm font-bold">0.00</span>
-                    <span class="text-[8px] md:text-[10px] font-black text-slate-500">NXP</span>
+                    <span class="text-[8px] md:text-[10px] font-black text-slate-500">NXC</span>
                 </div>
 
                 <div class="flex items-center space-x-1 md:space-x-2">
@@ -353,7 +353,7 @@
                             <i class="fas fa-wallet text-xl"></i>
                         </div>
                         <h3 class="font-black text-white text-sm tracking-widest uppercase">1. 接続</h3>
-                        <p class="text-xs text-slate-500 font-medium leading-relaxed">SSSウォレットを接続。テストネットのXYMを準備します。</p>
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed">SSSウォレットを接続。テストネットのクレジットを準備します。</p>
                     </div>
                     <div class="glass-card p-8 rounded-[2rem] space-y-4 border-white/5 relative overflow-hidden group">
                         <div class="absolute -right-4 -top-4 text-white/5 text-6xl font-black italic group-hover:text-purple-500/10 transition-colors">02</div>
@@ -464,7 +464,7 @@
                         <span class="block text-[8px] md:text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-3">謝礼貯金箱 (獲得累計)</span>
                         <div class="flex items-baseline space-x-2">
                             <span id="total-earned" class="text-3xl md:text-4xl font-black text-white">0.00</span>
-                            <span class="text-[10px] font-black text-indigo-400 uppercase">XYM</span>
+                            <span class="text-[10px] font-black text-indigo-400 uppercase">NXC</span>
                         </div>
                         <p class="text-[8px] text-slate-500 mt-3 font-medium">アセットの販売によって獲得した総額です</p>
                     </div>
@@ -504,7 +504,7 @@
                                     <input type="number" id="pPrice" value="10"
                                         class="w-full pl-5 md:pl-6 pr-12 md:pr-14 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/5 focus:bg-white/10 outline-none transition-all font-black text-indigo-500 text-base md:text-lg">
                                     <span
-                                        class="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-[8px] md:text-[9px] font-black text-slate-600 uppercase">XYM</span>
+                                        class="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-[8px] md:text-[9px] font-black text-slate-600 uppercase">NXC</span>
                                 </div>
                             </div>
                         </div>
@@ -629,7 +629,7 @@
                 <div class="space-y-3">
                     <label
                         class="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-1">Valuation
-                        (XYM)</label>
+                        (NXC)</label>
                     <input type="number" id="edit-price"
                         class="w-full px-5 md:px-6 py-4 md:py-5 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-black text-2xl md:text-3xl text-indigo-500">
                 </div>
@@ -867,9 +867,11 @@
             if (!activeAddress) return;
             try {
                 const nodeUrl = 'https://sym-test-03.opening-line.jp:3001';
-                const res = await fetch(`${nodeUrl}/accounts/${activeAddress}`);
-                if (res.ok) {
-                    const data = await res.json();
+                
+                // ブロックチェーン残高の取得
+                const accountRes = await fetch(`${nodeUrl}/accounts/${activeAddress}`);
+                if (accountRes.ok) {
+                    const data = await accountRes.json();
                     
                     // Nexus Credit (NXC)
                     const nxc = data.account.mosaics.find(m => m.id === '51138C86FBF19505');
@@ -902,8 +904,16 @@
                         document.getElementById('pioneer-badge').classList.add('hidden');
                     }
                 }
+
+                // 謝礼貯金箱（累計獲得額）の取得
+                const achRes = await fetch(`/api/achievements/${activeAddress}`);
+                if (achRes.ok) {
+                    const achData = await achRes.json();
+                    document.getElementById('total-earned').innerText = Number(achData.amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
+                }
+
             } catch (e) {
-                console.error('Balance update error:', e);
+                console.error('Stats update error:', e);
             }
         }
 
@@ -971,7 +981,7 @@
                             
                             <div class="absolute top-4 md:top-6 right-4 md:right-6 px-3 md:px-5 py-1.5 md:py-2.5 glass rounded-xl md:rounded-2xl shadow-2xl border-white/10">
                                 <span class="text-xs md:text-sm font-black text-white">${p.price}</span>
-                                <span class="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase ml-1">XYM</span>
+                                <span class="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase ml-1">NXC</span>
                             </div>
 
                             <div class="absolute bottom-4 md:bottom-6 left-6 md:left-8 right-6 md:right-8">
