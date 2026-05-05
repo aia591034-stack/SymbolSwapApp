@@ -419,6 +419,106 @@ app.post('/api/record_sale', async (req, res) => {
     }
 });
 
+// 秘密鍵からアドレスを導出するエンドポイント (スマホ用)
+app.post('/api/derive_address', async (req, res) => {
+    try {
+        const { privateKey } = req.body;
+        if (!privateKey) return res.status(400).json({ error: "秘密鍵が必要です" });
+        
+        const userPrivateKey = new PrivateKey(utils.hexToUint8(privateKey));
+        const userKeyPair = new KeyPair(userPrivateKey);
+        const address = facade.network.publicKeyToAddress(userKeyPair.publicKey).toString();
+        
+        res.json({ address, publicKey: utils.uint8ToHex(userKeyPair.publicKey.bytes) });
+    } catch (error) {
+        res.status(400).json({ error: "不正な秘密鍵です" });
+    }
+});
+
+// 秘密鍵を直接使用してスワップを実行するエンドポイント (スマホ用)
+app.post('/api/purchase_direct', async (req, res) => {
+    try {
+        const { privateKey, productId } = req.body;
+        if (!privateKey || !productId) return res.status(400).json({ error: "パラメータが不足しています" });
+
+        const products = await getProducts();
+        const p = products.find(item => item.id.toString() === productId.toString());
+        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
+
+        // 秘密を抽出
+        const secret = p.secret.replace('URL: ', '');
+
+        // ユーザー（購入者）のキーペア作成
+        const buyerPrivateKey = new PrivateKey(utils.hexToUint8(privateKey));
+        const buyerKeyPair = new KeyPair(buyerPrivateKey);
+        const buyerAddress = facade.network.publicKeyToAddress(buyerKeyPair.publicKey);
+
+        // 運営（手数料支払者）のキーペア作成
+        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+
+        const epochAdjustment = 1667250467;
+        const deadline = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
+
+        // トランザクション1: 支払い
+        const txPayment = facade.transactionFactory.createEmbedded({
+            type: 'transfer_transaction_v1',
+            signerPublicKey: buyerKeyPair.publicKey,
+            recipientAddress: p.sellerAddress,
+            mosaics: [{ mosaicId: toBigInt(CURRENCY_ID), amount: BigInt(p.price) * 1000000n }],
+            message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)])
+        });
+
+        // トランザクション2: 秘密の鍵渡し
+        const txData = facade.transactionFactory.createEmbedded({
+            type: 'transfer_transaction_v1',
+            signerPublicKey: operatorKeyPair.publicKey,
+            recipientAddress: buyerAddress.toString(),
+            mosaics: [],
+            message: new Uint8Array([0, ...Buffer.from(secret)])
+        });
+
+        // アグリゲートトランザクションの作成
+        const merkleRoot = facade.constructor.attachChildTransactions([txPayment, txData]);
+        const aggregateTx = facade.transactionFactory.create({
+            type: 'aggregate_complete_transaction_v2',
+            signerPublicKey: operatorKeyPair.publicKey,
+            deadline: deadline,
+            fee: 200000n,
+            transactionsHash: merkleRoot,
+            transactions: [txPayment, txData]
+        });
+
+        // 署名 (運営 + 購入者)
+        const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
+        const sigBuyer = facade.cosignTransaction(buyerKeyPair, aggregateTx, false);
+        
+        aggregateTx.signature = new models.Signature(sigOperator.bytes);
+        aggregateTx.cosignatures.push(new models.Cosignature({
+            signerPublicKey: buyerKeyPair.publicKey,
+            signature: new models.Signature(sigBuyer.bytes)
+        }));
+
+        const payload = utils.uint8ToHex(aggregateTx.serialize());
+        const hash = facade.hashTransaction(aggregateTx).toString();
+
+        const response = await fetch(`${NODE_URL}/transactions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload })
+        });
+
+        if (response.ok) {
+            res.json({ success: true, hash });
+        } else {
+            const err = await response.json();
+            res.status(500).json({ error: "トランザクション送信失敗", details: err });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // 各ユーザーの販売実績を取得するエンドポイント
 app.get('/api/achievements/:address', async (req, res) => {
     try {
