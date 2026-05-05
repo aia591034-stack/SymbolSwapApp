@@ -299,7 +299,7 @@ app.post('/api/build_transaction', async (req, res) => {
         // アグリゲートトランザクションの作成（最新のV2で統一）
         const merkleRoot = facade.constructor.hashEmbeddedTransactions(txs);
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2',
+            type: 'aggregate_complete_transaction_v1',
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             transactionsHash: merkleRoot,
@@ -486,7 +486,7 @@ app.post('/api/purchase_direct', async (req, res) => {
         // アグリゲートトランザクションの作成
         const merkleRoot = facade.constructor.hashEmbeddedTransactions([txPayment, txData]);
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2',
+            type: 'aggregate_complete_transaction_v1',
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             fee: 200000n,
