@@ -438,6 +438,7 @@ app.post('/api/derive_address', async (req, res) => {
 // 秘密鍵を直接使用してスワップを実行するエンドポイント (スマホ用)
 app.post('/api/purchase_direct', async (req, res) => {
     try {
+        console.log(`[DIRECT] Purchase request received. ProductId: ${req.body.productId}`);
         const { privateKey, productId } = req.body;
         if (!privateKey || !productId) return res.status(400).json({ error: "パラメータが不足しています" });
 
@@ -452,6 +453,8 @@ app.post('/api/purchase_direct', async (req, res) => {
         const buyerPrivateKey = new PrivateKey(utils.hexToUint8(privateKey));
         const buyerKeyPair = new KeyPair(buyerPrivateKey);
         const buyerAddress = facade.network.publicKeyToAddress(buyerKeyPair.publicKey);
+
+        console.log(`[DIRECT] Buyer derived: ${buyerAddress.toString()}`);
 
         // 運営（手数料支払者）のキーペア作成
         const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
@@ -478,8 +481,10 @@ app.post('/api/purchase_direct', async (req, res) => {
             message: new Uint8Array([0, ...Buffer.from(secret)])
         });
 
+        console.log(`[DIRECT] Embedded transactions created.`);
+
         // アグリゲートトランザクションの作成
-        const merkleRoot = facade.constructor.attachChildTransactions([txPayment, txData]);
+        const merkleRoot = facade.constructor.hashEmbeddedTransactions([txPayment, txData]);
         const aggregateTx = facade.transactionFactory.create({
             type: 'aggregate_complete_transaction_v2',
             signerPublicKey: operatorKeyPair.publicKey,
@@ -491,16 +496,20 @@ app.post('/api/purchase_direct', async (req, res) => {
 
         // 署名 (運営 + 購入者)
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
-        const sigBuyer = facade.cosignTransaction(buyerKeyPair, aggregateTx, false);
+        const sigBuyer = facade.cosignTransaction(buyerKeyPair, aggregateTx);
         
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
-        aggregateTx.cosignatures.push(new models.Cosignature({
-            signerPublicKey: buyerKeyPair.publicKey,
-            signature: new models.Signature(sigBuyer.bytes)
-        }));
+        
+        const cosig = new models.Cosignature();
+        cosig.version = 0n;
+        cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
+        cosig.signature = new models.Signature(sigBuyer.bytes);
+        aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
         const hash = facade.hashTransaction(aggregateTx).toString();
+
+        console.log(`[DIRECT] Transaction built. Hash: ${hash}`);
 
         const response = await fetch(`${NODE_URL}/transactions`, {
             method: 'PUT',
@@ -509,12 +518,15 @@ app.post('/api/purchase_direct', async (req, res) => {
         });
 
         if (response.ok) {
+            console.log(`[DIRECT] Success: ${hash}`);
             res.json({ success: true, hash });
         } else {
-            const err = await response.json();
-            res.status(500).json({ error: "トランザクション送信失敗", details: err });
+            const errText = await response.text();
+            console.error(`[DIRECT] Node Error:`, errText);
+            res.status(500).json({ error: "トランザクション送信失敗", details: errText });
         }
     } catch (error) {
+        console.error("[DIRECT] Critical Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
