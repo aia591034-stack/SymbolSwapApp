@@ -494,16 +494,19 @@ app.post('/api/purchase_direct', async (req, res) => {
             transactions: [txPayment, txData]
         });
 
-        // 署名 (運営 + 購入者)
-        const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
-        const sigBuyer = facade.cosignTransaction(buyerKeyPair, aggregateTx);
+        // --- 重要：署名の順番を修正 ---
         
+        // 1. まず主署名者（運営）が署名し、トランザクションにセットする
+        const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
+        
+        // 2. 主署名が入った後の状態（ハッシュが確定した後）で、購入者が連署を行う
+        const sigBuyer = facade.cosignTransaction(buyerKeyPair, aggregateTx);
         
         const cosig = new models.Cosignature();
         cosig.version = 0n;
         cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
-        cosig.signature = new models.Signature(sigBuyer.bytes);
+        cosig.signature = new models.Signature(sigBuyer.signature.bytes);
         aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
