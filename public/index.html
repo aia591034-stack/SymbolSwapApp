@@ -965,7 +965,9 @@
             if (activeAddress) {
                 const myItems = allProducts.filter(p => p.sellerAddress === activeAddress);
                 document.getElementById('my-items-count').innerText = myItems.length;
-                const purchasedCount = Object.keys(localStorage).filter(k => k.startsWith('purchased_')).length;
+                
+                // 購入数を現在のアドレスに紐づいたものだけに絞り込む
+                const purchasedCount = Object.keys(localStorage).filter(k => k.startsWith(`purchased_${activeAddress}_`)).length;
                 document.getElementById('purchased-count').innerText = purchasedCount;
 
                 // 謝礼貯金箱の計算 (デモ用に出品総額を表示、または将来的に販売実績を計算)
@@ -1228,7 +1230,7 @@
                             log('Swap validated by consensus', 'success');
                             showToast('Asset unlocked successfully');
 
-                            localStorage.setItem(`purchased_${p.id}`, 'true');
+                            localStorage.setItem(`purchased_${activeAddress}_${p.id}`, 'true');
 
                             // 売上実績の記録と昇格チェック
                             try {
