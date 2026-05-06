@@ -172,7 +172,7 @@ try {
 // --- ネットワーク・通貨設定 ---
 const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
 const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
-const NODE_URL = process.env.NODE_URL || 'https://testnet.symbol-sdk.com:3001'; 
+const NODE_URL = process.env.NODE_URL || 'https://testnet.symbol.services:3001'; 
 
 const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
@@ -484,24 +484,28 @@ app.post('/api/purchase_direct', async (req, res) => {
         console.log(`[DIRECT] Embedded transactions created.`);
 
         // アグリゲートトランザクションの作成
-        const merkleRoot = facade.constructor.hashEmbeddedTransactions([txPayment, txData]);
+        const transactions = [txPayment, txData];
+        const transactionsHash = facade.constructor.hashEmbeddedTransactions(transactions);
+
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2',
+            type: 'aggregate_complete_transaction_v1', // 互換性重視のV1
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
-            fee: 1000000n, // 手数料を1.0 XYMに増額
-            transactionsHash: merkleRoot,
-            transactions: [txPayment, txData]
+            fee: 500000n,
+            transactionsHash: transactionsHash,
+            transactions: transactions
         });
 
-        // --- 重要：署名の順番を修正 ---
-        
-        // 1. まず主署名者（運営）が署名し、トランザクションにセットする
+        // 1. 主署名 (運営)
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
         
-        // 2. 購入者が連署を行う（SDKの生成物をそのまま追加）
-        const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
+        // 2. 連署 (購入者)
+        const cosignature = facade.cosignTransaction(buyerKeyPair, aggregateTx);
+        const cosig = new models.Cosignature();
+        cosig.version = 0n;
+        cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
+        cosig.signature = new models.Signature(cosignature.signature.bytes);
         aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
