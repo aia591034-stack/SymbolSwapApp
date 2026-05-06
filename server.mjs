@@ -438,7 +438,7 @@ app.post('/api/derive_address', async (req, res) => {
 // 秘密鍵を直接使用してスワップを実行するエンドポイント (スマホ用)
 app.post('/api/purchase_direct', async (req, res) => {
     try {
-        console.log(`[DIRECT] Purchase request received. ProductId: ${req.body.productId}`);
+        console.log(`[DIRECT/BONDED] Request received. ProductId: ${req.body.productId}`);
         const { privateKey, productId } = req.body;
         if (!privateKey || !productId) return res.status(400).json({ error: "パラメータが不足しています" });
 
@@ -446,24 +446,15 @@ app.post('/api/purchase_direct', async (req, res) => {
         const p = products.find(item => item.id.toString() === productId.toString());
         if (!p) return res.status(404).json({ error: "商品が見つかりません" });
 
-        // 秘密を抽出
         const secret = p.secret.replace('URL: ', '');
-
-        // ユーザー（購入者）のキーペア作成
-        const buyerPrivateKey = new PrivateKey(utils.hexToUint8(privateKey));
-        const buyerKeyPair = new KeyPair(buyerPrivateKey);
+        const buyerKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(privateKey)));
         const buyerAddress = facade.network.publicKeyToAddress(buyerKeyPair.publicKey);
-
-        console.log(`[DIRECT] Buyer derived: ${buyerAddress.toString()}`);
-
-        // 運営（手数料支払者）のキーペア作成
-        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
-        const operatorKeyPair = new KeyPair(operatorPrivateKey);
+        const operatorKeyPair = new KeyPair(new PrivateKey(utils.hexToUint8(accounts.A.key)));
 
         const epochAdjustment = 1667250467;
         const deadline = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
 
-        // トランザクション1: 支払い
+        // 1. 埋め込みトランザクションの作成
         const txPayment = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: buyerKeyPair.publicKey,
@@ -472,7 +463,6 @@ app.post('/api/purchase_direct', async (req, res) => {
             message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)])
         });
 
-        // トランザクション2: 秘密の鍵渡し
         const txData = facade.transactionFactory.createEmbedded({
             type: 'transfer_transaction_v1',
             signerPublicKey: operatorKeyPair.publicKey,
@@ -481,52 +471,73 @@ app.post('/api/purchase_direct', async (req, res) => {
             message: new Uint8Array([0, ...Buffer.from(secret)])
         });
 
-        console.log(`[DIRECT] Embedded transactions created.`);
-
-        // アグリゲートトランザクションの作成
+        // 2. アグリゲート・ボンデッド・トランザクションの構築
         const transactions = [txPayment, txData];
         const transactionsHash = facade.constructor.hashEmbeddedTransactions(transactions);
 
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2', // 最新のV2で固定
+            type: 'aggregate_bonded_transaction_v2', // ボンデッド方式
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
-            fee: 1000000n, // 1.0 XYM
+            fee: 1000000n,
             transactionsHash: transactionsHash,
             transactions: transactions
         });
 
-        // --- 手動署名シーケンス（ビット単位での整合性確保） ---
-        
-        // 1. 運営（手数料支払者）が署名し、トランザクションにセットする
+        // 3. 署名 (運営が主署名)
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
         
-        // 2. 運営の署名が入った後の最終状態に対して、購入者が連署（Cosign）を行う
+        // 4. 連署 (購入者がその場で連署)
         const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
         aggregateTx.cosignatures.push(cosig);
 
-        const payload = utils.uint8ToHex(aggregateTx.serialize());
-        const hash = facade.hashTransaction(aggregateTx).toString();
+        const bondedPayload = utils.uint8ToHex(aggregateTx.serialize());
+        const bondedHash = facade.hashTransaction(aggregateTx).toString();
 
-        console.log(`[DIRECT] Transaction built. Hash: ${hash}`);
-
-        const response = await fetch(`${NODE_URL}/transactions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload })
+        // 5. ハッシュロック・トランザクションの作成 (10 XYMを預ける)
+        const hashLockTx = facade.transactionFactory.create({
+            type: 'hash_lock_transaction_v1',
+            signerPublicKey: operatorKeyPair.publicKey,
+            deadline: deadline,
+            fee: 100000n,
+            mosaic: { mosaicId: 0x72C0212E1A951CC2n, amount: 10000000n }, // 10 XYM (Testnet ID)
+            duration: 480n, // 約4時間有効
+            hash: new models.Hash256(utils.hexToUint8(bondedHash))
         });
 
-        if (response.ok) {
-            console.log(`[DIRECT] Success: ${hash}`);
-            res.json({ success: true, hash });
+        const sigHashLock = facade.signTransaction(operatorKeyPair, hashLockTx);
+        hashLockTx.signature = new models.Signature(sigHashLock.bytes);
+        const hashLockPayload = utils.uint8ToHex(hashLockTx.serialize());
+
+        console.log(`[DIRECT/BONDED] Announcing HashLock first...`);
+        const lockRes = await fetch(`${NODE_URL}/transactions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: hashLockPayload })
+        });
+
+        if (lockRes.ok) {
+            console.log(`[DIRECT/BONDED] HashLock announced. Now announcing Bonded payload...`);
+            // ハッシュロックとボンデッドを連続してアナウンス（ノードが自動でタイミングを合わせてくれます）
+            const bondedRes = await fetch(`${NODE_URL}/transactions/partial`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload: bondedPayload })
+            });
+
+            if (bondedRes.ok) {
+                res.json({ success: true, hash: bondedHash });
+            } else {
+                const err = await bondedRes.json();
+                res.status(500).json({ error: "ボンデッド送信失敗", details: err });
+            }
         } else {
-            const errText = await response.text();
-            console.error(`[DIRECT] Node Error:`, errText);
-            res.status(500).json({ error: "トランザクション送信失敗", details: errText });
+            const err = await lockRes.json();
+            res.status(500).json({ error: "ハッシュロック送信失敗", details: err });
         }
     } catch (error) {
-        console.error("[DIRECT] Critical Error:", error);
+        console.error("[DIRECT/BONDED] Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
