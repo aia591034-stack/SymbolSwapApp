@@ -501,7 +501,7 @@ app.post('/api/purchase_direct', async (req, res) => {
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             fee: 100000n,
-            mosaic: { mosaicId: 0x72C0212E1A951CC2n, amount: 10000000n }, // 10 XYM
+            mosaic: { mosaicId: 0x72C0212E67A08BCEn, amount: 10000000n }, // 正しい Testnet XYM ID
             duration: 480n,
             hash: utils.hexToUint8(bondedHash) // Hash256オブジェクトではなくbytesを直接渡す
         });
