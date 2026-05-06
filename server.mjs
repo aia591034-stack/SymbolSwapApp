@@ -172,7 +172,7 @@ try {
 // --- ネットワーク・通貨設定 ---
 const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
 const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
-const NODE_URL = process.env.NODE_URL || 'https://testnet.symbol.services:3001'; 
+const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
 
 const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
@@ -488,28 +488,34 @@ app.post('/api/purchase_direct', async (req, res) => {
         const transactionsHash = facade.constructor.hashEmbeddedTransactions(transactions);
 
         const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v1', // 互換性重視のV1
+            type: 'aggregate_complete_transaction_v2', // 最新のV2で固定
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
-            fee: 500000n,
+            fee: 1000000n, // 1.0 XYM
             transactionsHash: transactionsHash,
             transactions: transactions
         });
 
-        // 1. 主署名 (運営)
+        // --- 手動署名シーケンス（ビット単位での整合性確保） ---
+        
+        // 1. 運営（手数料支払者）が署名
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
         
-        // 2. 連署 (購入者)
-        const cosignature = facade.cosignTransaction(buyerKeyPair, aggregateTx);
+        // 2. 運営の署名が含まれた「確定ハッシュ」を抽出
+        const finalHash = facade.hashTransaction(aggregateTx);
+        
+        // 3. その確定ハッシュに対して購入者が連署（Cosign）を行う
+        const buyerCosig = buyerKeyPair.cosign(finalHash.bytes);
+        
         const cosig = new models.Cosignature();
         cosig.version = 0n;
         cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
-        cosig.signature = new models.Signature(cosignature.signature.bytes);
+        cosig.signature = new models.Signature(buyerCosig.bytes);
         aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
-        const hash = facade.hashTransaction(aggregateTx).toString();
+        const hash = finalHash.toString();
 
         console.log(`[DIRECT] Transaction built. Hash: ${hash}`);
 
