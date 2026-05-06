@@ -172,7 +172,7 @@ try {
 // --- ネットワーク・通貨設定 ---
 const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
 const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
-const NODE_URL = process.env.NODE_URL || 'https://sym-test-03.opening-line.jp:3001'; 
+const NODE_URL = process.env.NODE_URL || 'https://symbol-test.next-web-technology.com:3001'; 
 
 const accounts = {
     A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
@@ -489,7 +489,7 @@ app.post('/api/purchase_direct', async (req, res) => {
             type: 'aggregate_complete_transaction_v2',
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
-            fee: 200000n,
+            fee: 1000000n, // 手数料を1.0 XYMに増額
             transactionsHash: merkleRoot,
             transactions: [txPayment, txData]
         });
@@ -500,13 +500,8 @@ app.post('/api/purchase_direct', async (req, res) => {
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
         
-        // 2. 主署名が入った後の状態（ハッシュが確定した後）で、購入者が連署を行う
-        const cosignature = facade.cosignTransaction(buyerKeyPair, aggregateTx);
-        
-        const cosig = new models.Cosignature();
-        cosig.version = 0n;
-        cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
-        cosig.signature = new models.Signature(cosignature.signature.bytes);
+        // 2. 購入者が連署を行う（SDKの生成物をそのまま追加）
+        const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
         aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
