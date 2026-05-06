@@ -480,7 +480,7 @@ app.post('/api/purchase_direct', async (req, res) => {
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             fee: 1000000n,
-            transactionsHash: transactionsHash,
+            transactionsHash: transactionsHash.bytes, // Hash256オブジェクトではなくbytesを渡す
             transactions: transactions
         });
 
@@ -501,9 +501,9 @@ app.post('/api/purchase_direct', async (req, res) => {
             signerPublicKey: operatorKeyPair.publicKey,
             deadline: deadline,
             fee: 100000n,
-            mosaic: { mosaicId: 0x72C0212E1A951CC2n, amount: 10000000n }, // 10 XYM (Testnet ID)
-            duration: 480n, // 約4時間有効
-            hash: new models.Hash256(utils.hexToUint8(bondedHash))
+            mosaic: { mosaicId: 0x72C0212E1A951CC2n, amount: 10000000n }, // 10 XYM
+            duration: 480n,
+            hash: utils.hexToUint8(bondedHash) // Hash256オブジェクトではなくbytesを直接渡す
         });
 
         const sigHashLock = facade.signTransaction(operatorKeyPair, hashLockTx);
