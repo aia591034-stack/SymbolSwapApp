@@ -40,9 +40,14 @@ async function verifyLogic() {
     const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
     aggregateTx.signature = new models.Signature(sigOperator.bytes);
 
-    console.log("2. Cosigning as Buyer...");
-    const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
-    aggregateTx.cosignatures.push(cosig);
+    console.log("2. Testing Cosigning methods...");
+    try {
+        const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
+        console.log("facade.cosignTransaction success! Type:", cosig.constructor.name);
+        aggregateTx.cosignatures.push(cosig);
+    } catch (e) {
+        console.log("facade.cosignTransaction failed:", e.message);
+    }
 
     const payload = utils.uint8ToHex(aggregateTx.serialize());
     const hash = facade.hashTransaction(aggregateTx).toString();

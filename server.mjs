@@ -498,24 +498,16 @@ app.post('/api/purchase_direct', async (req, res) => {
 
         // --- 手動署名シーケンス（ビット単位での整合性確保） ---
         
-        // 1. 運営（手数料支払者）が署名
+        // 1. 運営（手数料支払者）が署名し、トランザクションにセットする
         const sigOperator = facade.signTransaction(operatorKeyPair, aggregateTx);
         aggregateTx.signature = new models.Signature(sigOperator.bytes);
         
-        // 2. 運営の署名が含まれた「確定ハッシュ」を抽出
-        const finalHash = facade.hashTransaction(aggregateTx);
-        
-        // 3. その確定ハッシュに対して購入者が連署（Cosign）を行う
-        const buyerCosig = buyerKeyPair.cosign(finalHash.bytes);
-        
-        const cosig = new models.Cosignature();
-        cosig.version = 0n;
-        cosig.signerPublicKey = new models.PublicKey(buyerKeyPair.publicKey.bytes);
-        cosig.signature = new models.Signature(buyerCosig.bytes);
+        // 2. 運営の署名が入った後の最終状態に対して、購入者が連署（Cosign）を行う
+        const cosig = facade.cosignTransaction(buyerKeyPair, aggregateTx);
         aggregateTx.cosignatures.push(cosig);
 
         const payload = utils.uint8ToHex(aggregateTx.serialize());
-        const hash = finalHash.toString();
+        const hash = facade.hashTransaction(aggregateTx).toString();
 
         console.log(`[DIRECT] Transaction built. Hash: ${hash}`);
 
