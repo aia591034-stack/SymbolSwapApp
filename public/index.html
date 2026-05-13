@@ -888,7 +888,19 @@
                     // Nexus Credit (NXC)
                     const nxc = data.account.mosaics.find(m => m.id === '51138C86FBF19505');
                     const nxcAmount = nxc ? (BigInt(nxc.amount) / 1000000n) : 0n;
+                    
+                    // Testnet XYM
+                    const xym = data.account.mosaics.find(m => m.id === '72C0212E67A08BCE');
+                    const xymAmount = xym ? (Number(BigInt(xym.amount)) / 1000000) : 0;
+
                     xymBalanceEl.innerText = Number(nxcAmount).toLocaleString(undefined, { minimumFractionDigits: 2 });
+                    
+                    // XYM残高を表示するための要素があれば更新（デバッグ用ログにも出力）
+                    console.log(`[BALANCE] NXC: ${nxcAmount}, XYM: ${xymAmount}`);
+                    if (xymAmount < 1.0) {
+                        log(`【注意】手数料用のXYMが不足しています（現在 ${xymAmount.toFixed(2)} XYM）。取引には 1 XYM 程度の保有を推奨します。`, 'error');
+                    }
+                    
                     balanceDisplay.classList.remove('hidden');
 
                     // ランク判定

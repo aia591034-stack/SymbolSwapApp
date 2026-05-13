@@ -89,7 +89,7 @@ app.get('/api/test', (req, res) => {
             hasSymbolFacade: typeof SymbolFacade === 'function'
         },
         env: {
-            isVercel: !!process.env.VERCEL,
+            isVercelEnv: !!process.env.VERCEL,
             hasPinata: !!process.env.PINATA_API_KEY,
             nodeUrl: process.env.NODE_URL,
             operatorKey: process.env.OPERATOR_KEY ? '******' + process.env.OPERATOR_KEY.substring(process.env.OPERATOR_KEY.length - 6) : null,
@@ -147,406 +147,57 @@ async function uploadToPinata(filePath, fileName) {
     }
 }
 
+// --- データベース・ストレージ設定 ---
+const DB_FILE = path.join(__dirname, 'data.json');
+const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
+const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
+const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
+
+async function getProducts() {
+    try {
+        if (process.env.VERCEL || (kvRestApiUrl && kvRestApiToken)) {
+            const data = await kv.get("products");
+            return data || [];
+        } else {
+            // ローカル環境のフォールバック
+            if (fs.existsSync(DB_FILE)) {
+                const raw = fs.readFileSync(DB_FILE, 'utf8');
+                return JSON.parse(raw).products || [];
+            }
+            return [];
+        }
+    } catch (error) {
+        console.error("Storage read error:", error);
+        return [];
+    }
+}
+
+async function saveProducts(products) {
+    try {
+        if (process.env.VERCEL || (kvRestApiUrl && kvRestApiToken)) {
+            console.log(`[DEBUG] Writing to Vercel KV`);
+            await kv.set("products", products);
+        } else {
+            // ローカル環境のフォールバック
+            fs.writeFileSync(DB_FILE, JSON.stringify({ products }, null, 2));
+            console.log("[DEBUG] Successfully wrote to local data.json.");
+        }
+    } catch (error) {
+        console.error("Storage write error:", error);
+    }
+}
+
 // データベースファイルの初期化（Vercel以外）
 if (!process.env.VERCEL) {
     try {
         if (!fs.existsSync(DB_FILE)) {
             fs.writeFileSync(DB_FILE, JSON.stringify({ products: [] }, null, 2));
         }
-        if (!fs.existsSync('uploads')) {
-            fs.mkdirSync('uploads', { recursive: true });
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
         }
     } catch (e) {
         console.error("DB Initialization Error:", e);
-    }
-}
-
-// facade の初期化を try-catch で囲む
-let facade;
-try {
-    facade = new SymbolFacade('testnet');
-} catch (e) {
-    console.error("SymbolFacade initialization failed!", e);
-}
-
-// --- ネットワーク・通貨設定 ---
-const CURRENCY_ID = '51138C86FBF19505'; // Nexus Credit (NXC)
-const PIONEER_MOSAIC_ID = '4E3FD79DC36A6474'; // Nexus Pioneer (NXP)
-const NODE_URL = process.env.NODE_URL || 'https://sym-test-01.opening-line.jp:3001'; 
-
-const accounts = {
-    A: { name: "運営", key: process.env.OPERATOR_KEY || 'CED3DD0A92ECC31FA33C32BF46356255145D9FA93FEE1FB9E11A10CDF39F44BC' }
-};
-
-// 16進数文字列を安全に BigInt に変換するヘルパー
-const toBigInt = (val) => {
-    if (typeof val === 'bigint') return val;
-    if (typeof val === 'number') return BigInt(Math.floor(val));
-    const cleanHex = String(val).startsWith('0x') ? val : '0x' + val;
-    return BigInt(cleanHex);
-};
-
-// Vercel等のDBがない環境用の一時的な保存先
-
-
-// SSS連携: クライアントから「部分署名済みのアグリゲートトランザクション」を受け取り、運営(A)がアナウンスするエンドポイント
-app.post('/api/purchase_sss', async (req, res) => {
-    try {
-        console.log(`[DEBUG - /api/purchase_sss] Received signedPayload: ${req.body.signedPayload ? req.body.signedPayload.substring(0, 100) + '...' : 'null'}`);
-        const { signedPayload } = req.body;
-        if (!signedPayload) {
-            console.error("[ERROR - /api/purchase_sss] Signed payload is missing.");
-            return res.status(400).json({ error: "署名済みデータがありません" });
-        }
-
-        console.log(`[DEBUG - /api/purchase_sss] Sending transaction to node: ${NODE_URL}/transactions`);
-        console.log(`[DEBUG - /api/purchase_sss] Request body payload: ${signedPayload.substring(0, 100)}...`);
-
-        const response = await fetch(`${NODE_URL}/transactions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload: signedPayload })
-        });
-
-        console.log(`[DEBUG - /api/purchase_sss] Node response status: ${response.status}`);
-        if (response.ok) {
-            res.json({ success: true, message: "トランザクションをネットワークに送信しました" });
-        } else {
-            const errorData = await response.json();
-            console.error("Node Error:", errorData);
-            res.status(response.status).json({ 
-                success: false, 
-                error: errorData.code || "トランザクション送信失敗", 
-                details: errorData.message || JSON.stringify(errorData) 
-            });
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// トランザクション構築エンドポイント（SDK v3を使用して正しい V2 アグリゲートを生成）
-app.post('/api/build_transaction', async (req, res) => {
-    try {
-        const { productId, buyerPublicKey, activeAddress } = req.body;
-        console.log(`[POST] build_transaction: productId=${productId}, buyerPublicKey=${buyerPublicKey}`);
-
-        if (!productId || !buyerPublicKey) {
-            return res.status(400).json({ error: "商品IDまたは公開鍵が不足しています" });
-        }
-
-        const products = await getProducts();
-        // IDの型（数値/文字列）に関わらず比較できるように修正
-        const p = products.find(item => item.id.toString() === productId.toString());
-        
-        if (!p) {
-            console.error(`[404] Product not found: ${productId}`);
-            return res.status(404).json({ error: "商品が見つかりません" });
-        }
-
-        console.log(`[INFO] Building transaction for: ${p.title}`);
-
-        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
-        const operatorKeyPair = new KeyPair(operatorPrivateKey);
-        const buyerPubKeyObj = new PublicKey(utils.hexToUint8(buyerPublicKey));
-        const sellerPubKeyObj = new PublicKey(utils.hexToUint8(p.sellerPublicKey));
-
-        const networkType = facade.network.identifier;
-        const epochAdjustment = 1667250467; // Testnet Epoch
-        const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
-        const deadline = symbolTime; // デスクリプタには生の BigInt を渡す
-
-        const txs = [];
-
-        // 1. 代金の支払い (Buyer -> Seller)
-        txs.push(facade.transactionFactory.createEmbedded({
-            type: 'transfer_transaction_v1',
-            signerPublicKey: buyerPubKeyObj,
-            recipientAddress: facade.network.publicKeyToAddress(sellerPubKeyObj),
-            mosaics: [{ 
-                mosaicId: toBigInt(CURRENCY_ID), 
-                amount: toBigInt(p.price * 1000000)
-            }],
-            message: new Uint8Array([0, ...Buffer.from('Nexus Swap: ' + p.title)]) // Plain message
-        }));
-
-        // 2. NFTの移転 (Seller -> Buyer)
-        if (p.saleType === 'nft' || p.saleType === 'both') {
-            if (p.mosaicId) {
-                txs.push(facade.transactionFactory.createEmbedded({
-                    type: 'transfer_transaction_v1',
-                    signerPublicKey: sellerPubKeyObj,
-                    recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-                    mosaics: [{ 
-                        mosaicId: toBigInt(p.mosaicId), 
-                        amount: 1n 
-                    }],
-                    message: new Uint8Array([0, ...Buffer.from('NFT Transfer: ' + p.title)])
-                }));
-            }
-        }
-
-        // 3. メッセージの記録 (Buyer -> Buyer)
-        txs.push(facade.transactionFactory.createEmbedded({
-            type: 'transfer_transaction_v1',
-            signerPublicKey: buyerPubKeyObj,
-            recipientAddress: facade.network.publicKeyToAddress(buyerPubKeyObj),
-            mosaics: [],
-            message: p.secret ? new Uint8Array([0, ...Buffer.from(p.secret)]) : new Uint8Array([0])
-        }));
-
-        // アグリゲートトランザクションの作成（最新のV2で統一）
-        const merkleRoot = facade.constructor.hashEmbeddedTransactions(txs);
-        const aggregateTx = facade.transactionFactory.create({
-            type: 'aggregate_complete_transaction_v2',
-            signerPublicKey: operatorKeyPair.publicKey,
-            deadline: deadline,
-            transactionsHash: merkleRoot,
-            transactions: txs,
-            fee: 1000000n
-        });
-
-        // 運営(Operator)が主署名者として署名
-        // 【重要】SDK v3 では signTransaction がアグリゲートの特殊な署名範囲（先頭52バイト）を自動的に扱います
-        const sig = facade.signTransaction(operatorKeyPair, aggregateTx);
-        aggregateTx.signature = new models.Signature(sig.bytes);
-
-        const payload = utils.uint8ToHex(aggregateTx.serialize());
-
-        // ペイロードを返す
-        res.json({ 
-            success: true, 
-            payload: payload,
-            hash: facade.hashTransaction(aggregateTx).toString()
-        });
-
-    } catch (error) {
-        console.error("Build Error Detail:", error);
-        res.status(500).json({ success: false, error: error.message, stack: error.stack });
-    }
-});
-
-// 署名を結合してアナウンスするエンドポイント
-app.post('/api/announce_transaction', async (req, res) => {
-    // ... (既存のコード)
-});
-
-// 売上を記録し、一定条件で Pioneer に昇格させるエンドポイント
-app.post('/api/record_sale', async (req, res) => {
-    try {
-        const { hash, productId, sellerAddress } = req.body;
-        if (!hash || !sellerAddress) return res.status(400).json({ error: "パラメータが不足しています" });
-
-        // 重複記録の防止
-        const saleRecordKey = `sale_recorded_${hash}`;
-        if (await kv.get(saleRecordKey)) return res.json({ success: true, message: "記録済みです" });
-
-        // トランザクションの検証（簡易版：ノードに問い合わせて確認済みかチェック）
-        const nodeRes = await fetch(`${NODE_URL}/transactionStatus/${hash}`);
-        const status = await nodeRes.json();
-        if (status.group !== 'confirmed') {
-            return res.status(400).json({ error: "トランザクションがまだ承認されていません" });
-        }
-
-        // 商品情報の取得（価格計算のため）
-        const products = await getProducts();
-        const p = products.find(item => item.id.toString() === productId.toString());
-        if (!p) return res.status(404).json({ error: "商品が見つかりません" });
-
-        // 実績の加算
-        const countKey = `user_sales_count_${sellerAddress}`;
-        const amountKey = `user_sales_amount_${sellerAddress}`;
-        
-        const newCount = (Number(await kv.get(countKey)) || 0) + 1;
-        const newAmount = (Number(await kv.get(amountKey)) || 0) + p.price;
-
-        await kv.set(countKey, newCount);
-        await kv.set(amountKey, newAmount);
-        await kv.set(saleRecordKey, true);
-
-        console.log(`[ACHIEVEMENT] Seller ${sellerAddress}: Count=${newCount}, Amount=${newAmount}`);
-
-        // Pioneer 昇格チェック (30回販売 または 50,000 NXC)
-        const meritPioneerKey = `pioneer_merit_${sellerAddress}`;
-        const welcomePioneerKey = `bonus_claimed_${sellerAddress}`; // Welcomeボーナスで既に持ってるか
-        
-        const alreadyPioneer = await kv.get(meritPioneerKey) || await kv.get(welcomePioneerKey);
-        
-        let promoted = false;
-        if (!alreadyPioneer && (newCount >= 30 || newAmount >= 50000)) {
-            console.log(`[PROMOTION] Promoting ${sellerAddress} to Pioneer by Merit!`);
-            
-            // バッジ送金トランザクションの実行
-            const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
-            const operatorKeyPair = new KeyPair(operatorPrivateKey);
-            const symbolTime = BigInt(Date.now() - 1667250467 * 1000 + 7200000);
-
-            const descriptor = {
-                type: 'transfer_transaction_v1',
-                signerPublicKey: operatorKeyPair.publicKey,
-                fee: 100000n,
-                deadline: symbolTime,
-                recipientAddress: sellerAddress,
-                mosaics: [{ mosaicId: toBigInt(PIONEER_MOSAIC_ID), amount: 1n }],
-                message: new Uint8Array([0, ...Buffer.from('Merit Achievement: Nexus Pioneer Promotion!')])
-            };
-
-            const tx = facade.transactionFactory.create(descriptor);
-            const sig = facade.signTransaction(operatorKeyPair, tx);
-            tx.signature = new models.Signature(sig.bytes);
-
-            await fetch(`${NODE_URL}/transactions`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ payload: utils.uint8ToHex(tx.serialize()) })
-            });
-
-            await kv.set(meritPioneerKey, true);
-            promoted = true;
-        }
-
-        res.json({ 
-            success: true, 
-            count: newCount, 
-            amount: newAmount, 
-            promoted: promoted 
-        });
-
-    } catch (error) {
-        console.error("Record Sale Error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// 各ユーザーの販売実績を取得するエンドポイント
-app.get('/api/achievements/:address', async (req, res) => {
-    try {
-        const { address } = req.params;
-        const count = await kv.get(`user_sales_count_${address}`) || 0;
-        const amount = await kv.get(`user_sales_amount_${address}`) || 0;
-        res.json({ count, amount });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// プランA: 新規ユーザーへの初回ボーナス配布エンドポイント
-app.post('/api/claim_bonus', async (req, res) => {
-    try {
-        const { address } = req.body;
-        if (!address) return res.status(400).json({ error: "アドレスがありません" });
-
-        // すでに配布済みかチェック
-        const bonusKey = `bonus_claimed_${address}`;
-        const alreadyClaimed = await kv.get(bonusKey);
-        
-        if (alreadyClaimed) {
-            return res.status(400).json({ error: "ボーナスは既に配布済みです" });
-        }
-
-        // 先着30名のカウントチェック
-        const countKey = 'pioneer_claim_count';
-        const currentCount = (await kv.get(countKey)) || 0;
-        const isPioneerEligible = currentCount < 30;
-
-        console.log(`[BONUS] Processing bonus for ${address}. Pioneer status: ${isPioneerEligible} (${currentCount}/30)`);
-
-        const operatorPrivateKey = new PrivateKey(utils.hexToUint8(accounts.A.key));
-        const operatorKeyPair = new KeyPair(operatorPrivateKey);
-        
-        const networkType = facade.network.identifier;
-        const epochAdjustment = 1667250467;
-        const symbolTime = BigInt(Date.now() - epochAdjustment * 1000 + 7200000);
-        const deadline = symbolTime;
-
-        // 500 NXC (Divisibility 6)
-        const amountNXC = 500n * 1000000n;
-        const mosaics = [{ mosaicId: toBigInt(CURRENCY_ID), amount: amountNXC }];
-        
-        // 100名以内ならバッジを追加
-        if (isPioneerEligible) {
-            mosaics.push({ mosaicId: toBigInt(PIONEER_MOSAIC_ID), amount: 1n });
-        }
-
-        const descriptor = {
-            type: 'transfer_transaction_v1',
-            signerPublicKey: operatorKeyPair.publicKey,
-            fee: 200000n,
-            deadline: deadline,
-            recipientAddress: address,
-            mosaics: mosaics,
-            message: new Uint8Array([0, ...Buffer.from(isPioneerEligible ? 'Nexus Welcome! 500 NXC + Pioneer Badge' : 'Nexus Welcome! 500 NXC')])
-        };
-
-        const tx = facade.transactionFactory.create(descriptor);
-        const sig = facade.signTransaction(operatorKeyPair, tx);
-        tx.signature = new models.Signature(sig.bytes);
-
-        const payload = utils.uint8ToHex(tx.serialize());
-
-        const response = await fetch(`${NODE_URL}/transactions`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload })
-        });
-
-        if (response.ok) {
-            // 配布済みフラグを保存
-            await kv.set(bonusKey, true);
-            // カウントをインクリメント（バッジを配った場合のみ）
-            if (isPioneerEligible) {
-                await kv.set(countKey, currentCount + 1);
-            }
-            res.json({ 
-                success: true, 
-                isPioneer: isPioneerEligible,
-                message: isPioneerEligible ? "500 NXC と Pioneerバッジを配布しました！" : "500 NXC を配布しました！" 
-            });
-        } else {
-            const errorData = await response.json();
-            res.status(500).json({ error: "配布に失敗しました", details: errorData });
-        }
-    } catch (error) {
-        console.error("Bonus Error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-async function getProducts() {
-    try {
-        const data = await kv.get("products");
-        return data || [];
-    } catch (error) {
-        console.error("Vercel KV read error:", error);
-        return [];
-    }
-}
-
-app.get('/api/products', async (req, res) => {
-    try {
-        const products = await getProducts();
-        console.log(`[GET] Fetching products list. Count: ${products.length}`);
-        const safeProducts = products.map(p => {
-            const { secret, ...safeProduct } = p;
-            return safeProduct;
-        });
-        res.json(safeProducts);
-    } catch (error) {
-        console.error(`[ERROR] Products endpoint failed: ${error.message}`);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// 秘密情報(secret)をクライアントに送る。
-// 本来は署名検証等が必要だが、デモとして「リクエストしたアドレス」を信用して送信する
-async function saveProducts(products) {
-    try {
-        console.log(`[DEBUG] Writing to Vercel KV with key 'products'`);
-        await kv.set("products", products);
-        console.log("[DEBUG] Successfully wrote to Vercel KV.");
-    } catch (error) {
-        console.error("Vercel KV write error:", error);
     }
 }
 
@@ -596,14 +247,27 @@ app.get('/api/products/:id/download', async (req, res) => {
 
         const secretStr = product.secret.replace('URL: ', '');
         console.log(`[DEBUG - /api/products/:id/download] secretStr: ${secretStr}`);
+        
         if (secretStr.startsWith('http')) {
             // Pinata (IPFS) のURLの場合は直接リダイレクトする
             console.log(`[INFO] Redirecting to IPFS gateway: ${secretStr}`);
-            res.redirect(secretStr);
+            return res.redirect(secretStr);
+        } else if (secretStr.includes('/uploads/')) {
+            // ローカルファイルパスが含まれている場合
+            const fileName = secretStr.split('/').pop();
+            const filePath = path.join(uploadDir, fileName);
+            
+            if (fs.existsSync(filePath)) {
+                return res.download(filePath, product.fileName || fileName);
+            } else {
+                console.warn(`[WARN] Local file not found in /tmp or uploads: ${filePath}`);
+                return res.status(404).json({ 
+                    error: "ファイルがサーバー上に見つかりません", 
+                    details: "Vercelの制限により一時ファイルが削除された可能性があります。IPFS(Pinata)の設定を推奨します。" 
+                });
+            }
         } else {
-            // Pinata URLではない場合、ファイルが見つからないというエラーを返す
-            console.log(`[WARN] Non-IPFS URL or local path attempted for download: ${secretStr}`);
-            res.status(404).json({ error: "ファイルがサーバー上に見つかりません" });
+            return res.status(404).json({ error: "無効なダウンロードURLです" });
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
