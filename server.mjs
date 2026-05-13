@@ -248,6 +248,59 @@ app.post('/api/products', upload.fields([{ name: 'file', maxCount: 1 }, { name: 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.patch('/api/products/:id', upload.fields([{ name: 'image', maxCount: 1 }]), async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { title, price, description, imageUrl, requesterAddress } = req.body;
+        const products = await getProducts();
+        const idx = products.findIndex(p => String(p.id) === String(id));
+        if (idx === -1) return res.status(404).json({ error: "Product not found" });
+
+        const opPriv = new PrivateKey(utils.hexToUint8(accounts.A.key));
+        const opKP = new KeyPair(opPriv);
+        const opAddr = facade.network.publicKeyToAddress(opKP.publicKey).toString();
+
+        if (requesterAddress !== products[idx].sellerAddress && requesterAddress !== opAddr) {
+            return res.status(403).json({ error: "Forbidden" });
+        }
+
+        // Update fields
+        if (title) products[idx].title = title;
+        if (price) products[idx].price = parseInt(price);
+        if (description) products[idx].description = description;
+
+        // Image Handling
+        const imageFile = req.files['image']?.[0];
+        if (imageFile) {
+            let finalImageUrl = null;
+            const PINATA_API_KEY = process.env.PINATA_API_KEY;
+            const PINATA_SECRET = process.env.PINATA_SECRET_API_KEY;
+            
+            if (PINATA_API_KEY && PINATA_SECRET) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', new Blob([fs.readFileSync(imageFile.path)]), imageFile.originalname);
+                    const resp = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+                        method: 'POST',
+                        headers: { 'pinata_api_key': PINATA_API_KEY, 'pinata_secret_api_key': PINATA_SECRET },
+                        body: formData
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        finalImageUrl = `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
+                    }
+                } catch (pinErr) { console.error("Pinata Update Failed", pinErr); }
+            }
+            products[idx].imageUrl = finalImageUrl || `${req.protocol}://${req.get('host')}/uploads/${imageFile.filename}`;
+        } else if (imageUrl) {
+            products[idx].imageUrl = imageUrl;
+        }
+
+        await saveProducts(products);
+        res.json({ success: true, product: products[idx] });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.delete('/api/products/:id', async (req, res) => {
     try {
         const products = await getProducts();
