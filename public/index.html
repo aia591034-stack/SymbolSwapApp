@@ -1043,7 +1043,8 @@
                     list.appendChild(card);
 
                     // Check if already purchased
-                    if (localStorage.getItem(`purchased_${p.id}`)) {
+                    const purchaseKey = `purchased_${activeAddress}_${p.id}`;
+                    if (localStorage.getItem(purchaseKey) || localStorage.getItem(`purchased_${p.id}`)) {
                         const btn = document.getElementById(`buy-${p.id}`);
                         if (btn) {
                             btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-3 text-lg"></i>データを取得';
